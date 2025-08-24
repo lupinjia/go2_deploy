@@ -73,44 +73,44 @@ public:
         ctrl.loadPolicy();
     }
 
-    void initRobotStateClient()
-    {
-        rsc.SetTimeout(10.0f); 
-        rsc.Init();
-    }
+    // void initRobotStateClient()
+    // {
+    //     rsc.SetTimeout(10.0f); 
+    //     rsc.Init();
+    // }
 
-    int queryServiceStatus(const std::string& serviceName)
-    {
-        std::vector<ServiceState> serviceStateList;
-        int ret,serviceStatus;
-        ret = rsc.ServiceList(serviceStateList);
-        size_t i, count=serviceStateList.size();
-        for (i=0; i<count; i++)
-        {
-            const ServiceState& serviceState = serviceStateList[i];
-            if(serviceState.name == serviceName)
-            {
-                if(serviceState.status == 0)
-                {   
-                    std::cout << "name: " << serviceState.name <<" is activate"<<std::endl;
-                    serviceStatus = 1;
-                }
-                else
-                {
-                    std::cout << "name:" << serviceState.name <<" is deactivate"<<std::endl;
-                    serviceStatus = 0;
-                } 
-            }    
-        }
-        return serviceStatus;
-    }
+    // int queryServiceStatus(const std::string& serviceName)
+    // {
+    //     std::vector<ServiceState> serviceStateList;
+    //     int ret,serviceStatus;
+    //     ret = rsc.ServiceList(serviceStateList);
+    //     size_t i, count=serviceStateList.size();
+    //     for (i=0; i<count; i++)
+    //     {
+    //         const ServiceState& serviceState = serviceStateList[i];
+    //         if(serviceState.name == serviceName)
+    //         {
+    //             if(serviceState.status == 0)
+    //             {   
+    //                 std::cout << "name: " << serviceState.name <<" is activate"<<std::endl;
+    //                 serviceStatus = 1;
+    //             }
+    //             else
+    //             {
+    //                 std::cout << "name:" << serviceState.name <<" is deactivate"<<std::endl;
+    //                 serviceStatus = 0;
+    //             } 
+    //         }    
+    //     }
+    //     return serviceStatus;
+    // }
 
-    void activateService(const std::string& serviceName, int activate)
-    {
-        rsc.ServiceSwitch(serviceName, activate);
-    }
+    // void activateService(const std::string& serviceName, int activate)
+    // {
+    //     rsc.ServiceSwitch(serviceName, activate);
+    // }
 
-    void InitDdsModel(const std::string &networkInterface = "")
+    void InitDdsModel()
     {
         // init dds
         lowcmd_publisher.reset(new ChannelPublisher<unitree_go::msg::dds_::LowCmd_>(TOPIC_LOWCMD));
@@ -126,18 +126,18 @@ public:
         std::chrono::milliseconds duration(100); // 100ms
         // init low-level command
         init_low_cmd();
-        // listen to gamepad command
-        std::cout << "Press START button to start!" << std::endl;
-        while (true)
-        {
-            std::this_thread::sleep_for(duration);
+        // // listen to gamepad command
+        // std::cout << "Press START button to start!" << std::endl;
+        // while (true)
+        // {
+        //     std::this_thread::sleep_for(duration);
 
-            InteprateGamePad();
-            if (gamepad.start.on_press)
-            {
-                break;
-            }
-        }
+        //     InteprateGamePad();
+        //     if (gamepad.start.on_press)
+        //     {
+        //         break;
+        //     }
+        // }
 
         // prepare for start
         std::cout << "Start!" << std::endl;

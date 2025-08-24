@@ -54,9 +54,8 @@ class RLController : public BasicUserController
             clock_input.fill(0.0);
             theta.fill(0.0);
             gait_period = 0.0;
-            phase_ratio.fill(0.0);
             frame_stack = 5;
-            num_single_obs = 54; // length of single step observation
+            num_single_obs = 52; // length of single step observation
             lin_vel_scale = 2.0;
             ang_vel_scale = 0.25;
             dof_vel_scale = 0.05;
@@ -108,8 +107,6 @@ class RLController : public BasicUserController
             frame_stack = cfg.frame_stack;
             num_single_obs = cfg.num_single_obs;
             num_gaits = cfg.num_gaits;
-            gait_periods.resize(num_gaits);
-            swing_phase_ratios.resize(num_gaits);
             theta_fl.resize(num_gaits);
             theta_fr.resize(num_gaits);
             theta_rl.resize(num_gaits);
@@ -121,16 +118,21 @@ class RLController : public BasicUserController
             }
             for (int i = 0; i < num_gaits; ++i)
             {
-                gait_periods.at(i) = cfg.gait_periods.at(i);
-                swing_phase_ratios.at(i) = cfg.swing_phase_ratios.at(i);
                 theta_fl.at(i) = cfg.theta_fl.at(i);
                 theta_fr.at(i) = cfg.theta_fr.at(i);
                 theta_rl.at(i) = cfg.theta_rl.at(i);
                 theta_rr.at(i) = cfg.theta_rr.at(i);
             }
-            gait_period = gait_periods.at(gait_choice);
-            phase_ratio.at(0) = swing_phase_ratios.at(gait_choice);
-            phase_ratio.at(1) = 1.0 - swing_phase_ratios.at(gait_choice);
+            // Read behavior param range
+            for (int i = 0; i < 2; ++i)
+            {
+                gait_period_range.at(i) = cfg.gait_period_range.at(i);
+                base_height_target_range.at(i) = cfg.base_height_target_range.at(i);
+                foot_clearance_target_range.at(i) = cfg.foot_clearance_target_range.at(i);
+            }
+            gait_period = gait_period_range.at(1);
+            base_height_target = base_height_target_range.at(1);
+            foot_clearance_target = foot_clearance_target_range.at(1);
             theta.at(0) = theta_fl.at(gait_choice);
             theta.at(1) = theta_fr.at(gait_choice);
             theta.at(2) = theta_rl.at(gait_choice);
@@ -187,9 +189,9 @@ class RLController : public BasicUserController
             gait_time = 0.0;
             phi = 0.0;
             gait_choice = 0; 
-            gait_period = gait_periods.at(gait_choice);
-            phase_ratio.at(0) = swing_phase_ratios.at(gait_choice);
-            phase_ratio.at(1) = 1.0 - swing_phase_ratios.at(gait_choice);
+            gait_period = gait_period_range.at(1);
+            base_height_target = base_height_target_range.at(1);
+            foot_clearance_target = foot_clearance_target_range.at(1);
             theta.at(0) = theta_fl.at(gait_choice);
             theta.at(1) = theta_fr.at(gait_choice);
             theta.at(2) = theta_rl.at(gait_choice);
@@ -293,7 +295,6 @@ class RLController : public BasicUserController
                 log.push_back(theta.at(i));
             }
             log.push_back(gait_period);
-            log.push_back(phase_ratio.at(0) * 2 * M_PI);
             return log;
         }
 
@@ -326,7 +327,8 @@ class RLController : public BasicUserController
         std::array<float, 4> clock_input;
         std::array<float, 4> theta; // theta_fl, theta_fr, theta_rl, theta_rr
         float gait_period;
-        std::array<float, 2> phase_ratio;
+        float base_height_target;
+        float foot_clearance_target;
         int frame_stack;
         int num_single_obs; // length of single step observation
         std::vector<float> single_step_obs; // 用于记录单步观测数据
@@ -345,8 +347,9 @@ class RLController : public BasicUserController
         // gait
         int num_gaits;
         int gait_choice;
-        std::vector<float> gait_periods;
-        std::vector<float> swing_phase_ratios; // ratio of swing phase in gait period
+        std::array<float, 2> gait_period_range;
+        std::array<float, 2> base_height_target_range;
+        std::array<float, 2> foot_clearance_target_range;
         std::vector<float> theta_fl;
         std::vector<float> theta_fr;
         std::vector<float> theta_rl;
@@ -377,9 +380,6 @@ class RLController : public BasicUserController
             }
             phi = gait_time / gait_period;
             // choose gait
-            gait_period = gait_periods.at(gait_choice);
-            phase_ratio.at(0) = swing_phase_ratios.at(gait_choice);
-            phase_ratio.at(1) = 1.0 - swing_phase_ratios.at(gait_choice);
             theta.at(0) = theta_fl.at(gait_choice);
             theta.at(1) = theta_fr.at(gait_choice);
             theta.at(2) = theta_rl.at(gait_choice);
@@ -407,10 +407,10 @@ class RLController : public BasicUserController
             for(int i = 0; i < 4; ++i)
             {
                 single_step_obs.at(i+45) = clock_input.at(i);
-                single_step_obs.at(i+49) = theta.at(i);
             }
-            single_step_obs.at(53) = gait_period;
-            single_step_obs.at(54) = phase_ratio.at(0) * 2 * M_PI; // swing phase ratio
+            single_step_obs.at(49) = gait_period;
+            single_step_obs.at(50) = base_height_target;
+            single_step_obs.at(51) = foot_clearance_target; 
         }
     };
 } // namespace unitree::common

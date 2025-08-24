@@ -57,8 +57,9 @@ namespace unitree::common
             FromJson(json["policy_name"], policy_name);
             FromJson(json["frame_stack"], frame_stack);
             FromJson(json["num_single_obs"], num_single_obs);
-            FromAny<float>(json["gait_periods"], gait_periods);
-            FromAny<float>(json["swing_phase_ratios"], swing_phase_ratios);
+            FromAny<float>(json["gait_period_range"], gait_period_range);
+            FromAny<float>(json["base_height_target_range"], base_height_target_range);
+            FromAny<float>(json["foot_clearance_target_range"], foot_clearance_target_range);
             FromAny<float>(json["stand_pos"], stand_pos);
             FromAny<float>(json["sit_pos"], sit_pos);
             FromAny<float>(json["theta_fl"], theta_fl);
@@ -82,8 +83,9 @@ namespace unitree::common
             ToJson(policy_name, json["policy_name"]);
             ToJson(frame_stack, json["frame_stack"]);
             ToJson(num_single_obs, json["num_single_obs"]);
-            ToAny<float>(swing_phase_ratios, json["swing_phase_ratios"]);
-            ToAny<float>(gait_periods, json["gait_periods"]);
+            ToAny<float>(gait_period_range, json["gait_period_range"]);
+            ToAny<float>(base_height_target_range, json["base_height_target_range"]);
+            ToAny<float>(foot_clearance_target_range, json["foot_clearance_target_range"]);
             ToAny<float>(stand_pos, json["stand_pos"]);
             ToAny<float>(sit_pos, json["sit_pos"]);
             ToAny<float>(theta_fl, json["theta_fl"]);
@@ -109,8 +111,9 @@ namespace unitree::common
         
         // gait parameters
         int num_gaits;
-        std::vector<float> gait_periods;
-        std::vector<float> swing_phase_ratios;
+        std::vector<float> gait_period_range;
+        std::vector<float> base_height_target_range;
+        std::vector<float> foot_clearance_target_range;
         std::vector<float> theta_fl;
         std::vector<float> theta_fr;
         std::vector<float> theta_rl;
