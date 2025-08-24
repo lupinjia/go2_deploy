@@ -170,10 +170,43 @@ class RLController : public BasicUserController
             std::copy(robot_interface.gyro.begin(), robot_interface.gyro.end(), base_ang_vel.begin());
             std::copy(robot_interface.projected_gravity.begin(), robot_interface.projected_gravity.end(), projected_gravity.begin());
 
+            // Left and Right for gait period
+            if(gamepad.left.pressed)
+            {
+                gait_period += 0.01;
+                gait_period = std::min(gait_period, gait_period_range.at(1));
+            }
+            else if(gamepad.right.pressed)
+            {
+                gait_period -= 0.01;
+                gait_period = std::max(gait_period, gait_period_range.at(0));
+            }
+            // Up and Down for base height target
+            if(gamepad.up.pressed)
+            {
+                base_height_target += 0.01;
+                base_height_target = std::min(base_height_target, base_height_target_range.at(1));
+            }
+            else if(gamepad.down.pressed)
+            {
+                base_height_target -= 0.01;
+                base_height_target = std::max(base_height_target, base_height_target_range.at(0));
+            }
+            // L1 and L2 for foot clearance target
+            if(gamepad.L1.pressed)
+            {
+                foot_clearance_target += 0.01;
+                foot_clearance_target = std::min(foot_clearance_target, foot_clearance_target_range.at(1));
+            }
+            else if(gamepad.L2.pressed)
+            {
+                foot_clearance_target -= 0.01;
+                foot_clearance_target = std::max(foot_clearance_target, foot_clearance_target_range.at(0));
+            }
             // record command
             cmd.at(0) = gamepad.ly; // linear_x: [-1,1]
             cmd.at(1) = -gamepad.lx; // linear_y; [-1,1]
-            cmd.at(2) = gamepad.rx; // angular_z: [-1,1]
+            cmd.at(2) = -gamepad.rx; // angular_z: [-1,1]
 
             // record robot state
             for (int i = 0; i < 12; ++i)

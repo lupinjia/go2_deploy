@@ -1,5 +1,5 @@
 {
-    "policy_name": "Aug24_14-41-49_step_gaitpolicy_1.pt",
+    "policy_name": "Aug24_18-59-18_step_gait.pt",
     "dt": 0.02,
     "stand_kp": 60.0,
     "stand_kd": 5.0,
