@@ -22,7 +22,6 @@
 #include "unitree/robot/channel/channel_publisher.hpp"
 #include "unitree/robot/channel/channel_subscriber.hpp"
 #include "unitree/common/time/time_tool.hpp"
-#include <unitree/robot/go2/robot_state/robot_state_client.hpp>
 
 #include "state_machine.hpp"
 #include "gamepad.hpp"
@@ -30,7 +29,6 @@
 
 using namespace unitree::common;
 using namespace unitree::robot;
-using namespace unitree::robot::go2;
 namespace fs = std::filesystem;
 
 #define TOPIC_LOWCMD "rt/lowcmd"
@@ -73,43 +71,6 @@ public:
         ctrl.loadPolicy();
     }
 
-    // void initRobotStateClient()
-    // {
-    //     rsc.SetTimeout(10.0f); 
-    //     rsc.Init();
-    // }
-
-    // int queryServiceStatus(const std::string& serviceName)
-    // {
-    //     std::vector<ServiceState> serviceStateList;
-    //     int ret,serviceStatus;
-    //     ret = rsc.ServiceList(serviceStateList);
-    //     size_t i, count=serviceStateList.size();
-    //     for (i=0; i<count; i++)
-    //     {
-    //         const ServiceState& serviceState = serviceStateList[i];
-    //         if(serviceState.name == serviceName)
-    //         {
-    //             if(serviceState.status == 0)
-    //             {   
-    //                 std::cout << "name: " << serviceState.name <<" is activate"<<std::endl;
-    //                 serviceStatus = 1;
-    //             }
-    //             else
-    //             {
-    //                 std::cout << "name:" << serviceState.name <<" is deactivate"<<std::endl;
-    //                 serviceStatus = 0;
-    //             } 
-    //         }    
-    //     }
-    //     return serviceStatus;
-    // }
-
-    // void activateService(const std::string& serviceName, int activate)
-    // {
-    //     rsc.ServiceSwitch(serviceName, activate);
-    // }
-
     void InitDdsModel()
     {
         // init dds
@@ -126,18 +87,18 @@ public:
         std::chrono::milliseconds duration(100); // 100ms
         // init low-level command
         init_low_cmd();
-        // // listen to gamepad command
-        // std::cout << "Press START button to start!" << std::endl;
-        // while (true)
-        // {
-        //     std::this_thread::sleep_for(duration);
+        // listen to gamepad command
+        std::cout << "Press START button to start!" << std::endl;
+        while (true)
+        {
+            std::this_thread::sleep_for(duration);
 
-        //     InteprateGamePad();
-        //     if (gamepad.start.on_press)
-        //     {
-        //         break;
-        //     }
-        // }
+            InteprateGamePad();
+            if (gamepad.start.on_press)
+            {
+                break;
+            }
+        }
 
         // prepare for start
         std::cout << "Start!" << std::endl;
@@ -180,8 +141,6 @@ protected:
     uint64_t ctrl_dt_micro_sec = 2000;
 
     std::vector<float> compute_time;
-
-    RobotStateClient rsc;
 
 private:
         
@@ -254,7 +213,7 @@ private:
         // R1 -> Sit
         // R2 -> Stand
         // A -> Ctrl
-        // Y -> Stop
+        // L2 + B -> Stop
         if(gamepad.R1.on_press)
         {
             if(state_machine.Sit())
@@ -276,7 +235,7 @@ private:
                 CtrlCallback();
             }
         }
-        if (gamepad.Y.pressed)
+        if (gamepad.L2.pressed && gamepad.B.pressed)
         {
             state_machine.Stop();
         }

@@ -7,6 +7,8 @@ Deployment code of RL policy on Unitree Go2 robot, using policies from [genesis_
 - [Nvidia Jetson Orin NX 100Tops](https://www.nvidia.com/en-us/autonomous-machines/embedded-systems/jetson-orin/)
 - x86_64 PC
 
+> Please make sure your robot software version > 1.1.6 (update through APP) 
+
 ## Installation
 
 Below operations should be conducted in a Jetson board.
