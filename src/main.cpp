@@ -52,14 +52,18 @@ int main(int argc, char const *argv[])
     // load neural network model
     robot_controller->loadPolicy();
 
-    // // deactivate the sport mode service
-    // robot_controller->initRobotStateClient();
-    // while(robot_controller->queryServiceStatus("sport_mode"))
-    // {
-    //     std::cout<<"Try to deactivate the service: "<<"sport_mode"<<std::endl;
-    //     robot_controller->activateService("sport_mode", 0);
-    //     sleep(1);
-    // }
+    if (argc >= 2)
+    {
+        // deactivate the mcf service
+        robot_controller->initRobotStateClient();
+        while(robot_controller->queryServiceStatus("mcf"))
+        {
+            std::cout<<"Try to deactivate the service: "<<"mcf"<<std::endl;
+            int serviceStatus = 0;
+            robot_controller->activateService("mcf", 0, serviceStatus);
+            sleep(1);
+        }
+    }
 
     // initialize dds model
     robot_controller->InitDdsModel();

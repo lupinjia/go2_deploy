@@ -9,39 +9,37 @@ Deployment code of RL policy on Unitree Go2 robot, using policies from [genesis_
 
 ## Installation
 
-Below operations should be conducted in a Jetson board.
-
 1. Install [unitree_sdk2](https://github.com/unitreerobotics/unitree_sdk2)
    ```bash
    git clone https://github.com/unitreerobotics/unitree_sdk2.git
-    cd unitree_sdk2/
-    mkdir build
-    cd build
-    cmake .. -DCMAKE_INSTALL_PREFIX=/opt/unitree_robotics
-    sudo make install
+   cd unitree_sdk2/
+   mkdir build
+   cd build
+   cmake .. -DCMAKE_INSTALL_PREFIX=/opt/unitree_robotics
+   sudo make install
    ```
 
 2. Install [LibTorch](https://pytorch.org/)
-  ```bash
-  # For Nvidia Jetson
-  wget https://download.pytorch.org/libtorch/cu118/libtorch-cxx11-abi-shared-with-deps-2.7.1%2Bcu118.zip # modify cuda version
-  # For x86_64 PC
-  wget https://download.pytorch.org/libtorch/cpu/libtorch-shared-with-deps-2.8.0%2Bcpu.zip
+   ```bash
+   # For Nvidia Jetson
+   wget https://download.pytorch.org/libtorch/cu118/libtorch-cxx11-abi-shared-with-deps-2.7.1%2Bcu118.zip # modify cuda version
+   # For x86_64 PC
+   wget https://download.pytorch.org/libtorch/cpu/libtorch-shared-with-deps-2.8.0%2Bcpu.zip
 
-  # unzip the file and get libtorch folder
-  # the CMAKE_PREFIX_PATH in CMakeLists.txt should be modified according to your installation path of libtorch
-  set(CMAKE_PREFIX_PATH /home/username/libtorch)     # in CMakeLists.txt
-  ```
+   # unzip the file and get libtorch folder
+   # the CMAKE_PREFIX_PATH in CMakeLists.txt should be modified according to your installation path of libtorch
+   set(CMAKE_PREFIX_PATH /home/username/libtorch)     # in CMakeLists.txt
+   ```
 
 3. Clone this repo and compile
-  ```bash
-  # clone the repo
-  git clone https://github.com/lupinjia/go2_deploy.git
-  mkdir build && cd build
-  cmake .. && make
-  ```
+   ```bash
+   # clone the repo
+   git clone https://github.com/lupinjia/go2_deploy.git
+   mkdir build && cd build
+   cmake .. && make
+   ```
 
-4. Clone unitree_mujoco and compile
+4. Clone unitree_mujoco and compile (for simulation in mujoco)
    
    1. install mujoco
       ```bash
@@ -75,10 +73,20 @@ Below operations should be conducted in a Jetson board.
    ```
 
 6. Deploy to real robot
+   ```bash
+   # Check your ethernet interface name
+   ifconfig
+   # Start controller
+   ./go2_deploy ethernet_name
+   ```
 
 ## Usage
 
 1. To customize your own RL inference code, you need to create a new class in `include/user_controller.hpp` inheriting `BasicUserController`. An example RLController has been provided, which implements NN inference using basic apis of libtorch and double ended queue.
+
+### Simulate in Mujoco
+
+
 
 ## Demo
 
