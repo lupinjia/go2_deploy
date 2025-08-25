@@ -12,11 +12,9 @@
 #include "robot_controller.hpp"
 #include "user_controller.hpp"
 #include "robot_interface.hpp"
-#include <unitree/robot/go2/robot_state/robot_state_client.hpp>
 
 using namespace unitree::common;
 using namespace unitree::robot;
-using namespace unitree::robot::go2;
 
 namespace fs = std::filesystem;
 
@@ -39,13 +37,6 @@ int main(int argc, char const *argv[])
     fs::path log_file_name = log_folder / "log.csv";
 
     /***** Controller *****/
-    RobotController<RLController> *robot_controller;
-    robot_controller = new RobotController<RLController>(log_file_name);
-    // load parameter from .json file
-    robot_controller->LoadParam(param);
-    // load neural network model
-    robot_controller->loadPolicy();
-
     if (argc < 2)
     {
         ChannelFactory::Instance()->Init(1, "lo"); // "lo" for local loopback
@@ -53,20 +44,22 @@ int main(int argc, char const *argv[])
     else
     {
         ChannelFactory::Instance()->Init(0, argv[1]);
-        // Init robot state client
-        RobotStateClient rsc;
-        rsc.SetTimeout(10.0f); 
-        rsc.Init();
-        // deactivate the mcf service
-        int serviceStatus = 0;
-        while(serviceStatus == 0)
-        {
-            std::cout<<"Try to deactivate the service: mcf" <<std::endl;
-            rsc.ServiceSwitch("mcf", 0, serviceStatus);
-            sleep(1);
-        }
-        std::cout << "Service mcf deactivated" << std::endl;
     }
+    RobotController<RLController> *robot_controller;
+    robot_controller = new RobotController<RLController>(log_file_name);
+    // load parameter from .json file
+    robot_controller->LoadParam(param);
+    // load neural network model
+    robot_controller->loadPolicy();
+
+    // // deactivate the sport mode service
+    // robot_controller->initRobotStateClient();
+    // while(robot_controller->queryServiceStatus("sport_mode"))
+    // {
+    //     std::cout<<"Try to deactivate the service: "<<"sport_mode"<<std::endl;
+    //     robot_controller->activateService("sport_mode", 0);
+    //     sleep(1);
+    // }
 
     // initialize dds model
     robot_controller->InitDdsModel();
