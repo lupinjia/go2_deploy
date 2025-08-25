@@ -70,6 +70,10 @@ Deployment code of RL policy on Unitree Go2 robot, using policies from [genesis_
    # Start Controller
    cd ../../../build
    ./go2_deploy
+   # R1 -> SIT Mode
+   # R2 -> STAND Mode
+   # A -> CTRL Mode
+   # Y -> DAMPING Mode
    ```
 
 6. Deploy to real robot
@@ -83,16 +87,14 @@ Deployment code of RL policy on Unitree Go2 robot, using policies from [genesis_
 ## Usage
 
 1. To customize your own RL inference code, you need to create a new class in `include/user_controller.hpp` inheriting `BasicUserController`. An example RLController has been provided, which implements NN inference using basic apis of libtorch and double ended queue.
-
-### Simulate in Mujoco
-
-
+2. It's recommended to first simulate in mujoco and then deploy to real robot to avoid potential collapse.
+3. Training code can be found in [genesis_lr](https://github.com/lupinjia/genesis_lr)
 
 ## Demo
 
 - Tuning robot behavior using [walk these ways](https://github.com/Improbable-AI/walk-these-ways) style
   
-  ![](./walk_these_ways.gif)
+   [video link](https://www.bilibili.com/video/BV1FPedzZEdi/)
 
 ## Acknowledgement
 
