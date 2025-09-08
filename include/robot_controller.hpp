@@ -27,6 +27,7 @@
 #include "state_machine.hpp"
 #include "gamepad.hpp"
 #include "robot_interface.hpp"
+#include "user_controller.hpp"
 
 using namespace unitree::common;
 using namespace unitree::robot;
@@ -37,13 +38,12 @@ namespace fs = std::filesystem;
 #define TOPIC_LOWSTATE "rt/lowstate"
 
 // RobotController为一个框架, 将有限状态机整体的逻辑具象化为一个类
-template <typename USER_CTRL>
 class RobotController
 {
 public:
-    RobotController() {}
+    RobotController(BasicUserController* ctrl) : ctrl(ctrl) {}
 
-    RobotController(fs::path &log_file_name)
+    RobotController(fs::path &log_file_name, BasicUserController* ctrl) : ctrl(ctrl)
     {
         // set log file
         log_file = std::ofstream(log_file_name);
@@ -63,14 +63,9 @@ public:
         log_file << header.str();
     }
 
-    void LoadParam(fs::path &param_folder)
-    {
-        ctrl.LoadParam(param_folder);
-    }
-
     void loadPolicy()
     {
-        ctrl.loadPolicy();
+        ctrl->loadPolicy();
     }
 
     void initRobotStateClient()
@@ -142,7 +137,7 @@ public:
         // prepare for start
         std::cout << "Start!" << std::endl;
         Damping();
-        ctrl_dt_micro_sec = static_cast<uint64_t>(ctrl.dt * 1000000); // 0.02s, 50Hz
+        ctrl_dt_micro_sec = static_cast<uint64_t>(ctrl->dt * 1000000); // 0.02s, 50Hz
 
         // Start the control thread
         control_thread_ptr = CreateRecurrentThreadEx("ctrl", UT_CPU_ID_NONE, ctrl_dt_micro_sec, &RobotController::ControlStep, this);
@@ -170,7 +165,7 @@ protected:
     REMOTE_DATA_RX rx;
 
     RLStateMachine state_machine;
-    USER_CTRL ctrl;
+    BasicUserController* ctrl;
     BasicRobotInterface robot_interface;
 
     std::mutex state_mutex, cmd_mutex;
@@ -297,7 +292,7 @@ private:
         // 读取状态信息
         {
             std::lock_guard<std::mutex> lock(state_mutex);
-            ctrl.GetInput(robot_interface, gamepad);
+            ctrl->GetInput(robot_interface, gamepad);
         }
         // 根据状态判断具体执行哪个状态下的处理函数
         if(state_machine.state == STATES::SIT)
@@ -358,7 +353,7 @@ private:
         if (log_file.is_open())
         {
             log_file << static_cast<size_t>(state_machine.state) << ",";
-            auto log = ctrl.GetLog();
+            auto log = ctrl->GetLog();
             for (const auto &v : log)
             {
                 log_file << v << ",";
@@ -372,12 +367,12 @@ private:
         // 保存初始关节位置
         {
             std::lock_guard<std::mutex> lock(state_mutex);
-            ctrl.save_jpos(robot_interface);
+            ctrl->save_jpos(robot_interface);
         }
-        robot_interface.jpos_des = ctrl.start_pos; // 由阻尼状态的初始位置开始
+        robot_interface.jpos_des = ctrl->start_pos; // 由阻尼状态的初始位置开始
         robot_interface.jvel_des.fill(0.);
-        robot_interface.kp.fill(ctrl.stand_kp);
-        robot_interface.kd.fill(ctrl.stand_kd);
+        robot_interface.kp.fill(ctrl->stand_kp);
+        robot_interface.kd.fill(ctrl->stand_kd);
         robot_interface.tau_ff.fill(0.);
     }
     /**
@@ -389,24 +384,24 @@ private:
         // 保存初始关节位置
         {
             std::lock_guard<std::mutex> lock(state_mutex);
-            ctrl.save_jpos(robot_interface);
+            ctrl->save_jpos(robot_interface);
         }
-        robot_interface.jpos_des = ctrl.start_pos; // 由阻尼状态的初始位置开始
+        robot_interface.jpos_des = ctrl->start_pos; // 由阻尼状态的初始位置开始
         robot_interface.jvel_des.fill(0.);
-        robot_interface.kp.fill(ctrl.stand_kp);
-        robot_interface.kd.fill(ctrl.stand_kd);
+        robot_interface.kp.fill(ctrl->stand_kp);
+        robot_interface.kd.fill(ctrl->stand_kd);
         robot_interface.tau_ff.fill(0.);
     }
 
     void CtrlCallback()
     {
         // 重置状态
-        ctrl.reset(robot_interface, gamepad);
+        ctrl->reset(robot_interface, gamepad);
 
-        robot_interface.jpos_des = ctrl.stand_pos;
+        robot_interface.jpos_des = ctrl->stand_pos;
         robot_interface.jvel_des.fill(0.);
-        robot_interface.kp.fill(ctrl.ctrl_kp);
-        robot_interface.kd.fill(ctrl.ctrl_kd);
+        robot_interface.kp.fill(ctrl->ctrl_kp);
+        robot_interface.kd.fill(ctrl->ctrl_kd);
         robot_interface.tau_ff.fill(0.);
     }
 
@@ -421,27 +416,27 @@ private:
 
     void Sitting(float kp = 60.0, float kd = 5.0)
     {
-        state_machine.Sitting(ctrl);
+        state_machine.Sitting(*ctrl);
 
-        robot_interface.jpos_des = ctrl.jpos_des;
+        robot_interface.jpos_des = ctrl->jpos_des;
     }
 
     void Standing(float kp = 60.0, float kd = 5.0)
     {
-        ctrl.DummyCalculate(); // warmup the neural network
-        
-        state_machine.Standing(ctrl);
+        ctrl->DummyCalculate(); // warmup the neural network
 
-        robot_interface.jpos_des = ctrl.jpos_des;
+        state_machine.Standing(*ctrl);
+
+        robot_interface.jpos_des = ctrl->jpos_des;
     }
 
     void UserControlStep(bool send_cmd = false)
     {
-        ctrl.Calculate();
+        ctrl->Calculate();
 
         if (send_cmd)
         {
-            robot_interface.jpos_des = ctrl.jpos_des;
+            robot_interface.jpos_des = ctrl->jpos_des;
         }
         
     }
@@ -452,7 +447,7 @@ private:
         // {
         //     return true;
         // }
-        if(max_abs(ctrl.jpos_des) > 3*M_PI/2)
+        if(max_abs(ctrl->jpos_des) > 3*M_PI/2)
         {
             return true;
         }

@@ -23,7 +23,15 @@ int main(int argc, char const *argv[])
     // constant param_folder
     std::string param_folder = "../params";
     fs::path param = fs::current_path() / param_folder;
-
+    BaseCfg* cfg;
+    BasicUserController* user_ctrl;
+    // load config and user_controller according to the argument
+    if(argv[1] == std::string("wtw"))
+    {
+        cfg = new WTWCfg((param / "wtw_config.yaml").string());
+        user_ctrl = new WTWController(cfg);
+    }
+    
     /***** log *****/
     // get the current time
     auto now = std::chrono::system_clock::now();
@@ -37,22 +45,20 @@ int main(int argc, char const *argv[])
     fs::path log_file_name = log_folder / "log.csv";
 
     /***** Controller *****/
-    if (argc < 2)
+    if (argc < 3) // local loopback
     {
         ChannelFactory::Instance()->Init(1, "lo"); // "lo" for local loopback
     }
-    else
+    else // real robot
     {
-        ChannelFactory::Instance()->Init(0, argv[1]);
+        ChannelFactory::Instance()->Init(0, argv[2]);
     }
-    RobotController<RLController> *robot_controller;
-    robot_controller = new RobotController<RLController>(log_file_name);
-    // load parameter from .json file
-    robot_controller->LoadParam(param);
+    RobotController* robot_controller = new RobotController(log_file_name, user_ctrl);
     // load neural network model
     robot_controller->loadPolicy();
+    std::cout << "Loaded policy" << std::endl;
 
-    if (argc >= 2)
+    if (argc >= 3)
     {
         // deactivate the mcf service
         robot_controller->initRobotStateClient();

@@ -56,7 +56,7 @@ namespace unitree::common
          * @param None
          * @note  线性插值计算关节期望位置, 由阻尼状态逐渐变为站立状态. 目前站立需要2s
         */
-        void Standing(RLController& ctrl)
+        void Standing(BasicUserController& ctrl)
         {
             // 计算插值百分比
             standing_percent = (float)standing_count / standing_duration;
@@ -114,7 +114,7 @@ namespace unitree::common
          * @param None
          * @note  线性插值计算关节期望位置, 由阻尼状态逐渐变为SIT状态. 目前SIT需要2s
         */
-        void Sitting(RLController& ctrl)
+        void Sitting(BasicUserController& ctrl)
         {
             // 计算插值百分比
             sitting_percent = (float)sitting_count / sitting_duration;
