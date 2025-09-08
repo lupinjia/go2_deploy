@@ -19,7 +19,9 @@ namespace unitree::common
     class BasicUserController
     {
     public:
-        BasicUserController(BaseCfg* cfg) : cfg(cfg) {}
+        BasicUserController() {}
+
+        virtual void loadParam() = 0;
 
         virtual void loadPolicy() = 0;
 
@@ -39,7 +41,6 @@ namespace unitree::common
         }
 
         float dt;
-        BaseCfg* cfg;
         float stand_kp;
         float stand_kd;
         float ctrl_kp;
@@ -54,7 +55,7 @@ namespace unitree::common
 class WTWController : public BasicUserController
 {
     public:
-        WTWController(BaseCfg* cfg): BasicUserController(cfg)
+        WTWController(const std::string& cfg_file): BasicUserController()
          {
             // observation init to 0
             base_ang_vel.fill(0.0);
@@ -74,6 +75,69 @@ class WTWController : public BasicUserController
             dof_vel_scale = 0.05;
             num_gaits = 1;
             gait_choice = 0; // default to the first gait
+            config_file_name = cfg_file;
+        }
+
+        void loadParam()
+        {
+            WTWCfg cfg(config_file_name);
+            dt = cfg.dt;
+            stand_kp = cfg.stand_kp;
+            stand_kd = cfg.stand_kd;
+            action_scale = cfg.action_scale;
+            lin_vel_scale = cfg.lin_vel_scale;
+            ang_vel_scale = cfg.ang_vel_scale;
+            dof_vel_scale = cfg.dof_vel_scale;
+            policy_name = cfg.policy_name;
+            ctrl_kp = cfg.ctrl_kp;
+            ctrl_kd = cfg.ctrl_kd;
+            frame_stack = cfg.frame_stack;
+            num_single_obs = cfg.num_single_obs;
+            num_gaits = cfg.num_gaits;
+            theta_fl.resize(num_gaits);
+            theta_fr.resize(num_gaits);
+            theta_rl.resize(num_gaits);
+            theta_rr.resize(num_gaits);
+            for (int i = 0; i < 12; ++i)
+            {
+                stand_pos.at(i) = cfg.stand_pos.at(i);
+                sit_pos.at(i) = cfg.sit_pos.at(i);
+            }
+            for (int i = 0; i < num_gaits; ++i)
+            {
+                theta_fl.at(i) = cfg.theta_fl.at(i);
+                theta_fr.at(i) = cfg.theta_fr.at(i);
+                theta_rl.at(i) = cfg.theta_rl.at(i);
+                theta_rr.at(i) = cfg.theta_rr.at(i);
+            }
+            // Read behavior param range
+            for (int i = 0; i < 2; ++i)
+            {
+                gait_period_range.at(i) = cfg.gait_period_range.at(i);
+                base_height_target_range.at(i) = cfg.base_height_target_range.at(i);
+                foot_clearance_target_range.at(i) = cfg.foot_clearance_target_range.at(i);
+            }
+            gait_period = gait_period_range.at(1);
+            base_height_target = base_height_target_range.at(1);
+            foot_clearance_target = foot_clearance_target_range.at(1);
+            theta.at(0) = theta_fl.at(gait_choice);
+            theta.at(1) = theta_fr.at(gait_choice);
+            theta.at(2) = theta_rl.at(gait_choice);
+            theta.at(3) = theta_rr.at(gait_choice);
+            // initialize history observation buffer
+            // prepare history buffers
+            single_step_obs.resize(num_single_obs);
+            single_step_obs.clear();
+            for(int i = 0; i < num_single_obs; ++i)
+            {
+                single_step_obs.push_back(0.0);
+            }
+            history_obs.resize(frame_stack);
+            for(int i = 0; i < frame_stack; ++i)
+            {
+                history_obs.at(i).resize(num_single_obs);
+                history_obs.at(i) = single_step_obs;
+            }
         }
 
         /**
@@ -256,6 +320,7 @@ class WTWController : public BasicUserController
         }
         
         std::array<float, 12> tau;
+        std::string config_file_name;
     
         // observation
         std::array<float, 3> base_ang_vel;

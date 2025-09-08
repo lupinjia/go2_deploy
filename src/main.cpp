@@ -23,15 +23,7 @@ int main(int argc, char const *argv[])
     // constant param_folder
     std::string param_folder = "../params";
     fs::path param = fs::current_path() / param_folder;
-    BaseCfg* cfg;
-    BasicUserController* user_ctrl;
-    // load config and user_controller according to the argument
-    if(argv[1] == std::string("wtw"))
-    {
-        cfg = new WTWCfg((param / "wtw_config.yaml").string());
-        user_ctrl = new WTWController(cfg);
-    }
-    
+
     /***** log *****/
     // get the current time
     auto now = std::chrono::system_clock::now();
@@ -53,8 +45,17 @@ int main(int argc, char const *argv[])
     {
         ChannelFactory::Instance()->Init(0, argv[2]);
     }
+
+    BasicUserController* user_ctrl;
+    // load config and user_controller according to the argument
+    if(argv[1] == std::string("wtw"))
+    {
+        std::string config_file_dir = param / "wtw_config.yaml";
+        user_ctrl = new WTWController(config_file_dir);
+    }
     RobotController* robot_controller = new RobotController(log_file_name, user_ctrl);
     // load neural network model
+    robot_controller->loadParam();
     robot_controller->loadPolicy();
     std::cout << "Loaded policy" << std::endl;
 

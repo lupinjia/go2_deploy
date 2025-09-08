@@ -63,6 +63,11 @@ public:
         log_file << header.str();
     }
 
+    void loadParam()
+    {
+        ctrl->loadParam();
+    }
+
     void loadPolicy()
     {
         ctrl->loadPolicy();
