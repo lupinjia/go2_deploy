@@ -63,13 +63,14 @@ int main(int argc, char const *argv[])
     {
         // deactivate the mcf service
         robot_controller->initRobotStateClient();
-        while(robot_controller->queryServiceStatus("mcf"))
+        std::cout<<"Try to deactivate the service: "<<"mcf"<<std::endl;
+        int serviceStatus = 0;
+        while (!serviceStatus)
         {
-            std::cout<<"Try to deactivate the service: "<<"mcf"<<std::endl;
-            int serviceStatus = 0;
             robot_controller->activateService("mcf", 0, serviceStatus);
             sleep(1);
         }
+        std::cout<<"Deactivate the service: "<<"mcf"<<std::endl;
     }
 
     // initialize dds model

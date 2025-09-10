@@ -79,32 +79,6 @@ public:
         rsc.Init();
     }
 
-    int queryServiceStatus(const std::string& serviceName)
-    {
-        std::vector<ServiceState> serviceStateList;
-        int ret,serviceStatus;
-        ret = rsc.ServiceList(serviceStateList);
-        size_t i, count=serviceStateList.size();
-        for (i=0; i<count; i++)
-        {
-            const ServiceState& serviceState = serviceStateList[i];
-            if(serviceState.name == serviceName)
-            {
-                if(serviceState.status == 0)
-                {   
-                    std::cout << "name: " << serviceState.name <<" is activate"<<std::endl;
-                    serviceStatus = 1;
-                }
-                else
-                {
-                    std::cout << "name:" << serviceState.name <<" is deactivate"<<std::endl;
-                    serviceStatus = 0;
-                } 
-            }    
-        }
-        return serviceStatus;
-    }
-
     void activateService(const std::string& serviceName, int activate, int& serviceStatus)
     {
         rsc.ServiceSwitch(serviceName, activate, serviceStatus);
