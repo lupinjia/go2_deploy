@@ -46,6 +46,10 @@ namespace unitree::common
                 {
                     foot_clearance_target_range.push_back(v.as<float>());
                 }
+                for(const auto& v : cfg["pitch_target_range"])
+                {
+                    pitch_target_range.push_back(v.as<float>());
+                }
                 for(const auto& v : cfg["theta_fl"])
                 {
                     theta_fl.push_back(v.as<float>());
@@ -97,6 +101,7 @@ namespace unitree::common
         std::vector<float> gait_period_range;
         std::vector<float> base_height_target_range;
         std::vector<float> foot_clearance_target_range;
+        std::vector<float> pitch_target_range;
         std::vector<float> theta_fl;
         std::vector<float> theta_fr;
         std::vector<float> theta_rl;

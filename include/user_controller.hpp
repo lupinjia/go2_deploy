@@ -67,13 +67,6 @@ class WTWController : public BasicUserController
             actions.fill(0.0);
             clock_input.fill(0.0);
             theta.fill(0.0);
-            gait_period = 0.0;
-            frame_stack = 5;
-            num_single_obs = 52; // length of single step observation
-            lin_vel_scale = 2.0;
-            ang_vel_scale = 0.25;
-            dof_vel_scale = 0.05;
-            num_gaits = 1;
             gait_choice = 0; // default to the first gait
             config_file_name = cfg_file;
         }
@@ -116,10 +109,12 @@ class WTWController : public BasicUserController
                 gait_period_range.at(i) = cfg.gait_period_range.at(i);
                 base_height_target_range.at(i) = cfg.base_height_target_range.at(i);
                 foot_clearance_target_range.at(i) = cfg.foot_clearance_target_range.at(i);
+                pitch_target_range.at(i) = cfg.pitch_target_range.at(i);
             }
             gait_period = gait_period_range.at(1);
             base_height_target = base_height_target_range.at(1);
             foot_clearance_target = foot_clearance_target_range.at(1);
+            pitch_target = pitch_target_range.at(1);
             theta.at(0) = theta_fl.at(gait_choice);
             theta.at(1) = theta_fr.at(gait_choice);
             theta.at(2) = theta_rl.at(gait_choice);
@@ -180,16 +175,36 @@ class WTWController : public BasicUserController
                 base_height_target -= 0.01;
                 base_height_target = std::max(base_height_target, base_height_target_range.at(0));
             }
-            // L1 and L2 for foot clearance target
-            if(gamepad.L1.pressed)
+            // A and B for foot clearance target
+            if(gamepad.A.pressed)
             {
                 foot_clearance_target += 0.01;
                 foot_clearance_target = std::min(foot_clearance_target, foot_clearance_target_range.at(1));
             }
-            else if(gamepad.L2.pressed)
+            else if(gamepad.B.pressed)
             {
                 foot_clearance_target -= 0.01;
                 foot_clearance_target = std::max(foot_clearance_target, foot_clearance_target_range.at(0));
+            }
+            // X and Y for pitch target
+            if(gamepad.X.pressed)
+            {
+                pitch_target += 0.01;
+                pitch_target = std::min(pitch_target, pitch_target_range.at(1));
+            }
+            else if(gamepad.Y.pressed)
+            {
+                pitch_target -= 0.01;
+                pitch_target = std::max(pitch_target, pitch_target_range.at(0));
+            }
+            // R1 and R2 for gait choice
+            if(gamepad.R1.on_press)
+            {
+                gait_choice = (gait_choice + 1) % num_gaits;
+            }
+            else if(gamepad.R2.on_press)
+            {
+                gait_choice = (gait_choice - 1 + num_gaits) % num_gaits;
             }
             // record command
             cmd.at(0) = gamepad.ly; // linear_x: [-1,1]
@@ -213,6 +228,7 @@ class WTWController : public BasicUserController
             gait_period = gait_period_range.at(1);
             base_height_target = base_height_target_range.at(1);
             foot_clearance_target = foot_clearance_target_range.at(1);
+            pitch_target = pitch_target_range.at(1);
             theta.at(0) = theta_fl.at(gait_choice);
             theta.at(1) = theta_fr.at(gait_choice);
             theta.at(2) = theta_rl.at(gait_choice);
@@ -311,11 +327,14 @@ class WTWController : public BasicUserController
             {
                 log.push_back(clock_input.at(i));
             }
+            log.push_back(gait_period);
+            log.push_back(base_height_target);
+            log.push_back(foot_clearance_target);
+            log.push_back(pitch_target);
             for (int i = 0; i < 4; i++)
             {
                 log.push_back(theta.at(i));
             }
-            log.push_back(gait_period);
             return log;
         }
         
@@ -330,10 +349,11 @@ class WTWController : public BasicUserController
         std::array<float, 12> jvel;
         std::array<float, 12> actions;
         std::array<float, 4> clock_input;
-        std::array<float, 4> theta; // theta_fl, theta_fr, theta_rl, theta_rr
         float gait_period;
         float base_height_target;
         float foot_clearance_target;
+        float pitch_target;
+        std::array<float, 4> theta; // theta_fl, theta_fr, theta_rl, theta_rr
         int frame_stack;
         int num_single_obs; // length of single step observation
         std::vector<float> single_step_obs; // 用于记录单步观测数据
@@ -352,6 +372,7 @@ class WTWController : public BasicUserController
         std::array<float, 2> gait_period_range;
         std::array<float, 2> base_height_target_range;
         std::array<float, 2> foot_clearance_target_range;
+        std::array<float, 2> pitch_target_range;
         std::vector<float> theta_fl;
         std::vector<float> theta_fr;
         std::vector<float> theta_rl;
@@ -409,10 +430,12 @@ class WTWController : public BasicUserController
             for(int i = 0; i < 4; ++i)
             {
                 single_step_obs.at(i+45) = clock_input.at(i);
+                single_step_obs.at(i+53) = theta.at(i);
             }
             single_step_obs.at(49) = gait_period;
             single_step_obs.at(50) = base_height_target;
             single_step_obs.at(51) = foot_clearance_target; 
+            single_step_obs.at(52) = pitch_target;
         }
     };
 } // namespace unitree::common

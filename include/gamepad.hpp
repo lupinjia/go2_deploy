@@ -63,8 +63,8 @@ namespace unitree::common
             pressed = state;
         }
 
-        bool pressed = false;
-        bool on_press = false;
+        bool pressed = false;    // pressed会持续
+        bool on_press = false;   // on_press和on_release都是一瞬间
         bool on_release = false;
     };
 

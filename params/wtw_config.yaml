@@ -1,4 +1,4 @@
-policy_name: "Aug24_18-59-18_step_gait.pt"
+policy_name: "Sep11_23-28-50_step_gait.pt"
 dt: 0.02
 stand_kp: 60.0
 stand_kd: 5.0
@@ -9,15 +9,16 @@ lin_vel_scale: 1.0
 ang_vel_scale: 0.25
 dof_vel_scale: 0.05
 frame_stack: 5
-num_single_obs: 52
-num_gaits: 1
+num_single_obs: 57                       # length of single step observation
+num_gaits: 3                             # equals length of theta_fl
 gait_period_range: [0.3, 0.6]
-base_height_target_range: [0.2, 0.35]
-foot_clearance_target_range: [0.03, 0.1]
-theta_fl: [0.0]
-theta_fr: [0.5]
-theta_rl: [0.5]
-theta_rr: [0.0]
+base_height_target_range: [0.2, 0.36]
+foot_clearance_target_range: [0.03, 0.12]
+pitch_target_range: [-0.3, 0.3]
+theta_fl: [0.0, 0.0, 0.5]
+theta_fr: [0.5, 0.0, 0.0]
+theta_rl: [0.5, 0.5, 0.5]
+theta_rr: [0.0, 0.5, 0.0]
 stand_pos: [
     0.0,
     0.8,

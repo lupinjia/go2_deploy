@@ -55,10 +55,9 @@ public:
         header << "jpos0,jpos1,jpos2,jpos3,jpos4,jpos5,jpos6,jpos7,jpos8,jpos9,jpos10,jpos11,";
         header << "jvel0,jvel1,jvel2,jvel3,jvel4,jvel5,jvel6,jvel7,jvel8,jvel9,jvel10,jvel11,";
         header << "action0,action1,action2,action3,action4,action5,action6,action7,action8,action9,action10,action11,";
-        header << "clock0,clock1,clock2,clock3";
+        header << "clock0,clock1,clock2,clock3,";
+        header << "gait_period,base_height_target,foot_clearance_target,pitch_target,";
         header << "theta0,theta1,theta2,theta3";
-        header << "gait_period";
-        header << "swing_phase_ratio";
         header << std::endl;
         log_file << header.str();
     }
@@ -225,32 +224,32 @@ private:
 
    void UpdateStateMachine()
     {
-        // R1 -> Sit
-        // R2 -> Stand
-        // A -> Ctrl
-        // Y -> Stop
-        if(gamepad.R1.on_press)
+        // L1 + R1 -> Sit
+        // L1 + R2 -> Stand
+        // L1 + A -> Ctrl
+        // L1 + Y -> Stop
+        if(gamepad.R1.on_press && gamepad.L1.pressed)
         {
             if(state_machine.Sit())
             {
                 SitCallback();
             }
         }
-        if (gamepad.R2.on_press)
+        if (gamepad.R2.on_press && gamepad.L1.pressed)
         {
             if (state_machine.Stand()) // 进入站立状态
             {
                 StandCallback();
             }
         }
-        if (gamepad.A.on_press)
+        if (gamepad.A.on_press && gamepad.L1.pressed)
         {
             if (state_machine.Ctrl())
             {
                 CtrlCallback();
             }
         }
-        if (gamepad.Y.pressed)
+        if (gamepad.Y.pressed && gamepad.L1.pressed)
         {
             state_machine.Stop();
         }
