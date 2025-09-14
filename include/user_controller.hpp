@@ -51,7 +51,156 @@ namespace unitree::common
         std::array<float, 12> sit_pos; // sit状态最终位置
     };
 
-// UserController为实际进行控制所需计算的类
+
+class SimpleRLController : public BasicUserController
+{
+public:
+    SimpleRLController(const std::string& cfg_file)
+    {
+        // observation init to 0
+        base_ang_vel.fill(0.0);
+        projected_gravity.fill(0.);
+        projected_gravity.at(2) = -1.0;
+        cmd.fill(0.0);
+        jpos_processed.fill(0.0);
+        jvel.fill(0.0);
+        actions.fill(0.0);
+        config_file_name = cfg_file;
+    }
+    void loadParam()
+    {
+        SimpleRLCfg cfg(config_file_name);
+        dt = cfg.dt;
+        stand_kp = cfg.stand_kp;
+        stand_kd = cfg.stand_kd;
+        action_scale = cfg.action_scale;
+        lin_vel_scale = cfg.lin_vel_scale;
+        ang_vel_scale = cfg.ang_vel_scale;
+        dof_pos_scale = cfg.dof_pos_scale;
+        dof_vel_scale = cfg.dof_vel_scale;
+        policy_name = cfg.policy_name;
+        ctrl_kp = cfg.ctrl_kp;
+        ctrl_kd = cfg.ctrl_kd;
+        num_obs = cfg.num_obs;
+        obs.resize(num_obs);
+        for (int i = 0; i < 12; ++i)
+        {
+            stand_pos.at(i) = cfg.stand_pos.at(i);
+            sit_pos.at(i) = cfg.sit_pos.at(i);
+        }
+    }
+    void loadPolicy()
+    {
+        fs::path model_path = fs::current_path() / "../models";
+        policy = torch::jit::load(model_path / policy_name);
+        std::cout << "Load policy from: " << model_path / policy_name << std::endl;
+    }
+    void reset(BasicRobotInterface &robot_interface, Gamepad &gamepad)
+    {
+        // do nothing
+    }
+    void GetInput(BasicRobotInterface &robot_interface, Gamepad &gamepad)
+    {
+        // save necessary data from input
+        std::copy(robot_interface.gyro.begin(), robot_interface.gyro.end(), base_ang_vel.begin());
+        std::copy(robot_interface.projected_gravity.begin(), robot_interface.projected_gravity.end(), projected_gravity.begin());
+        // record command
+        cmd.at(0) = gamepad.ly; // linear_x: [-1,1]
+        cmd.at(1) = -gamepad.lx; // linear_y; [-1,1]
+        cmd.at(2) = -gamepad.rx; // angular_z: [-1,1]
+        // record robot state
+        for (int i = 0; i < 12; ++i)
+        {
+            jpos_processed.at(i) = robot_interface.jpos.at(i) - stand_pos.at(i);
+            jvel.at(i) = robot_interface.jvel.at(i);
+        }
+    }
+    void DummyCalculate()
+    {
+        // warmup the neural network
+        for(int i = 0; i < num_obs; ++i)
+        {
+            obs.at(i) = 0.0;
+        }
+        std::vector<torch::jit::IValue> policy_input;
+        torch::Tensor policy_input_tensor = torch::zeros({1, num_obs});
+        for(int i = 0; i < num_obs; ++i)
+        {
+            policy_input_tensor[0][i] = obs.at(i);
+        }
+        policy_input.push_back(policy_input_tensor);
+        torch::Tensor policy_output_tensor = policy.forward(policy_input).toTensor();
+    }
+    void Calculate()
+    {
+        // Fill observation
+        for(int i = 0; i < 3; ++i)
+        {
+            obs.at(i) = base_ang_vel.at(i) * ang_vel_scale;
+            obs.at(3 + i) = projected_gravity.at(i);
+        }
+        obs.at(6) = cmd.at(0) * lin_vel_scale;
+        obs.at(7) = cmd.at(1) * lin_vel_scale;
+        obs.at(8) = cmd.at(2) * ang_vel_scale;
+        for(int i = 0; i < 12; ++i)
+        {
+            obs.at(9 + i) = jpos_processed.at(i) * dof_pos_scale;
+            obs.at(21 + i) = jvel.at(i) * dof_vel_scale;
+            obs.at(33 + i) = actions.at(i);
+        }
+        // Conduct Policy Inference
+        std::vector<torch::jit::IValue> policy_input;
+        torch::Tensor policy_input_tensor = torch::zeros({1, num_obs});
+        for(int i = 0; i < num_obs; ++i)
+        {
+            policy_input_tensor[0][i] = obs.at(i);
+        }
+        policy_input.push_back(policy_input_tensor);
+        torch::Tensor policy_output_tensor = policy.forward(policy_input).toTensor();
+        std::array<float, 12> actions_scaled;
+        for(int i = 0; i < 12; ++i)
+        {
+            actions.at(i) = policy_output_tensor[0][i].item<float>();
+            actions_scaled.at(i) = actions.at(i) * action_scale;
+            jpos_des.at(i) = actions_scaled.at(i) + stand_pos.at(i);
+        }
+    }
+    std::vector<float> GetLog()
+    {
+        // record input, output and other info into a vector
+        std::vector<float> log;
+        log.push_back(cmd.at(0));
+        log.push_back(cmd.at(1));
+        log.push_back(cmd.at(2));
+        return log;
+    }
+
+    std::string config_file_name;
+    
+    // observation
+    std::array<float, 3> base_ang_vel;
+    std::array<float, 3> projected_gravity;
+    std::array<float, 3> cmd;
+    std::array<float, 12> jpos_processed;       //joint sequence: sim
+    std::array<float, 12> jvel;
+    std::array<float, 12> actions;
+    std::vector<float> obs;                     // current observation
+    int num_obs;                                // length of observation
+    // normalization parameters
+    float lin_vel_scale;
+    float ang_vel_scale;
+    float dof_pos_scale;
+    float dof_vel_scale;
+    // control params
+    float action_scale;
+    // NN model
+    std::string policy_name;
+    torch::jit::script::Module policy;
+};
+/**
+ * @brief Inheritance of BasicUserController, controller for Walk These Ways
+ * 
+ */
 class WTWController : public BasicUserController
 {
     public:
@@ -80,6 +229,7 @@ class WTWController : public BasicUserController
             action_scale = cfg.action_scale;
             lin_vel_scale = cfg.lin_vel_scale;
             ang_vel_scale = cfg.ang_vel_scale;
+            dof_pos_scale = cfg.dof_pos_scale;
             dof_vel_scale = cfg.dof_vel_scale;
             policy_name = cfg.policy_name;
             ctrl_kp = cfg.ctrl_kp;
@@ -216,7 +366,6 @@ class WTWController : public BasicUserController
             {
                 jpos_processed.at(i) = robot_interface.jpos.at(i) - stand_pos.at(i);
                 jvel.at(i) = robot_interface.jvel.at(i);
-                tau.at(i) = robot_interface.tau.at(i);
             }
         }
 
@@ -338,7 +487,6 @@ class WTWController : public BasicUserController
             return log;
         }
         
-        std::array<float, 12> tau;
         std::string config_file_name;
     
         // observation
@@ -362,9 +510,9 @@ class WTWController : public BasicUserController
         // normalization parameters
         float lin_vel_scale;
         float ang_vel_scale;
+        float dof_pos_scale;
         float dof_vel_scale;
-        // params
-        
+        // control params
         float action_scale;
         // gait
         int num_gaits;
@@ -423,7 +571,7 @@ class WTWController : public BasicUserController
             }
             for(int i = 0; i < 12; ++i)
             {
-                single_step_obs.at(i+9) = jpos_processed.at(i);
+                single_step_obs.at(i+9) = jpos_processed.at(i) * dof_pos_scale;
                 single_step_obs.at(i+21) = jvel.at(i) * dof_vel_scale;
                 single_step_obs.at(i+33) = actions.at(i);
             }
@@ -437,5 +585,6 @@ class WTWController : public BasicUserController
             single_step_obs.at(51) = foot_clearance_target; 
             single_step_obs.at(52) = pitch_target;
         }
-    };
+};
+
 } // namespace unitree::common

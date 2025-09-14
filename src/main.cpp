@@ -53,6 +53,16 @@ int main(int argc, char const *argv[])
         std::string config_file_dir = param / "wtw_config.yaml";
         user_ctrl = new WTWController(config_file_dir);
     }
+    else if(argv[1] == std::string("simple_rl"))
+    {
+        std::string config_file_dir = param / "simple_rl_config.yaml";
+        user_ctrl = new SimpleRLController(config_file_dir);
+    }
+    else
+    {
+        std::cerr << "Unknown controller type: " << argv[1] << std::endl;
+        return -1;
+    }
     RobotController* robot_controller = new RobotController(log_file_name, user_ctrl);
     // load neural network model
     robot_controller->loadParam();
