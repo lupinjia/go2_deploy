@@ -1,0 +1,43 @@
+policy_name: "Sep18_11-52-31_gym_policy.pt"
+encoder_name: "Sep18_11-52-31_gym_encoder.pt"
+use_genesis: False
+dt: 0.02
+stand_kp: 60.0
+stand_kd: 5.0
+ctrl_kp: 20
+ctrl_kd: 0.5
+action_scale: 0.25
+lin_vel_scale: 1.0
+ang_vel_scale: 0.25
+dof_pos_scale: 1.0
+dof_vel_scale: 0.05
+frame_stack: 4
+num_single_obs: 45   # length of single step observation
+stand_pos: [
+    0.0,
+    0.8,
+    -1.5,
+    0.0,
+    0.8,
+    -1.5,
+    0.0,
+    0.8,
+    -1.5,
+    0.0,
+    0.8,
+    -1.5
+]
+sit_pos: [            # For transition from damping to sitting
+    0.04,
+    1.3,
+    -2.87,
+    -0.02,
+    1.29,
+    -2.86,
+    -0.33,
+    1.27,
+    -2.81,
+    0.32,
+    1.28,
+    -2.87
+]
