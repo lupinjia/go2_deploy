@@ -1,6 +1,6 @@
-policy_name: "Sep18_11-52-31_gym_policy.pt"
-encoder_name: "Sep18_11-52-31_gym_encoder.pt"
-use_genesis: False
+policy_name: "Sep28_17-01-19_gs_policy.pt"
+encoder_name: "Sep28_17-01-19_gs_encoder.pt"
+use_genesis: True
 dt: 0.02
 stand_kp: 60.0
 stand_kd: 5.0
