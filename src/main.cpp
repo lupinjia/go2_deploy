@@ -48,15 +48,15 @@ int main(int argc, char const *argv[])
 
     BasicUserController* user_ctrl;
     // load config and user_controller according to the argument
-    if(argv[1] == std::string("wtw"))
-    {
-        std::string config_file_dir = param / "wtw_config.yaml";
-        user_ctrl = new WTWController(config_file_dir);
-    }
-    else if(argv[1] == std::string("simple_rl"))
+    if(argv[1] == std::string("simple_rl"))
     {
         std::string config_file_dir = param / "simple_rl_config.yaml";
         user_ctrl = new SimpleRLController(config_file_dir);
+    }
+    else if(argv[1] == std::string("wtw"))
+    {
+        std::string config_file_dir = param / "wtw_config.yaml";
+        user_ctrl = new WTWController(config_file_dir);
     }
     else if(argv[1] == std::string("ts"))
     {
