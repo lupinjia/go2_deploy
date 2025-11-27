@@ -425,10 +425,10 @@ private:
         // {
         //     return true;
         // }
-        if(max_abs(ctrl->jpos_des) > 3*M_PI/2)
-        {
-            return true;
-        }
+        // if(max_abs(ctrl->jpos_des) > 3*M_PI/2)
+        // {
+        //     return true;
+        // }
         return false;
     }
 };

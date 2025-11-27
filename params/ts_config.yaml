@@ -1,5 +1,5 @@
-policy_name: "Sep28_17-01-19_gs_policy.pt"
-encoder_name: "Sep28_17-01-19_gs_encoder.pt"
+policy_name: "ts_policy.pt"
+encoder_name: "ts_encoder.pt"
 use_genesis: True
 dt: 0.02
 stand_kp: 60.0
@@ -11,7 +11,7 @@ lin_vel_scale: 1.0
 ang_vel_scale: 0.25
 dof_pos_scale: 1.0
 dof_vel_scale: 0.05
-frame_stack: 4
+frame_stack: 20
 num_single_obs: 45   # length of single step observation
 stand_pos: [
     0.0,
