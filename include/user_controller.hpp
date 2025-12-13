@@ -16,40 +16,40 @@ namespace fs = std::filesystem;
 
 namespace unitree::common
 {
-    class BasicUserController
+class BasicUserController
+{
+public:
+    BasicUserController() {}
+
+    virtual void loadParam() = 0;
+
+    virtual void loadPolicy() = 0;
+
+    virtual void reset(BasicRobotInterface &robot_interface, Gamepad &gamepad) = 0;
+
+    virtual void GetInput(BasicRobotInterface &robot_interface, Gamepad &gamepad) = 0;
+
+    virtual void DummyCalculate() = 0;
+
+    virtual void Calculate() = 0;
+
+    virtual std::vector<float> GetLog() = 0;
+
+    void save_jpos(BasicRobotInterface &robot_interface)
     {
-    public:
-        BasicUserController() {}
+        std::copy(robot_interface.jpos.begin(), robot_interface.jpos.end(), start_pos.begin());
+    }
 
-        virtual void loadParam() = 0;
-
-        virtual void loadPolicy() = 0;
-
-        virtual void reset(BasicRobotInterface &robot_interface, Gamepad &gamepad) = 0;
-
-        virtual void GetInput(BasicRobotInterface &robot_interface, Gamepad &gamepad) = 0;
-
-        virtual void DummyCalculate() = 0;
-
-        virtual void Calculate() = 0;
-
-        virtual std::vector<float> GetLog() = 0;
-
-        void save_jpos(BasicRobotInterface &robot_interface)
-        {
-            std::copy(robot_interface.jpos.begin(), robot_interface.jpos.end(), start_pos.begin());
-        }
-
-        float dt;
-        float stand_kp;
-        float stand_kd;
-        float ctrl_kp;
-        float ctrl_kd;
-        std::array<float, 12> start_pos; // 阻尼状态的位置
-        std::array<float, 12> stand_pos; // 站立状态最终位置
-        std::array<float, 12> jpos_des;
-        std::array<float, 12> sit_pos; // sit状态最终位置
-    };
+    float dt;
+    float stand_kp;
+    float stand_kd;
+    float ctrl_kp;
+    float ctrl_kd;
+    std::array<float, 12> start_pos; // 阻尼状态的位置
+    std::array<float, 12> stand_pos; // 站立状态最终位置
+    std::array<float, 12> jpos_des;
+    std::array<float, 12> sit_pos; // sit状态最终位置
+};
 
 
 class SimpleRLController : public BasicUserController
@@ -708,21 +708,33 @@ public:
         torch::Tensor obs_tensor = torch::zeros({1, num_single_obs});
         for(int i = 0; i < num_single_obs; i++)
             obs_tensor[0][i] = single_step_obs.at(i);
-        std::vector<torch::jit::IValue> encoder_input;
-        torch::Tensor encoder_input_tensor = torch::zeros({1, frame_stack*num_single_obs});
+        torch::Tensor obs_his_tensor = torch::zeros({1, frame_stack*num_single_obs});
         for(int i = 0; i < frame_stack; ++i)
         {
             for(int j = 0; j < num_single_obs; ++j)
             {
-                encoder_input_tensor[0][i*num_single_obs + j] = history_obs.at(i).at(j);
+                obs_his_tensor[0][i*num_single_obs + j] = history_obs.at(i).at(j);
             }
         }
-        encoder_input.push_back(encoder_input_tensor);
-        torch::Tensor encoder_output_tensor = encoder.forward(encoder_input).toTensor();
         std::vector<torch::jit::IValue> policy_input;
-        torch::Tensor policy_input_tensor = torch::cat({obs_tensor, encoder_output_tensor}, 1);
-        policy_input.push_back(policy_input_tensor);
+        policy_input.push_back(obs_tensor);
+        policy_input.push_back(obs_his_tensor);
         torch::Tensor policy_output_tensor = policy.forward(policy_input).toTensor();
+        // std::vector<torch::jit::IValue> encoder_input;
+        // torch::Tensor encoder_input_tensor = torch::zeros({1, frame_stack*num_single_obs});
+        // for(int i = 0; i < frame_stack; ++i)
+        // {
+        //     for(int j = 0; j < num_single_obs; ++j)
+        //     {
+        //         encoder_input_tensor[0][i*num_single_obs + j] = history_obs.at(i).at(j);
+        //     }
+        // }
+        // encoder_input.push_back(encoder_input_tensor);
+        // torch::Tensor encoder_output_tensor = encoder.forward(encoder_input).toTensor();
+        // std::vector<torch::jit::IValue> policy_input;
+        // torch::Tensor policy_input_tensor = torch::cat({obs_tensor, encoder_output_tensor}, 1);
+        // policy_input.push_back(policy_input_tensor);
+        // torch::Tensor policy_output_tensor = policy.forward(policy_input).toTensor();
     }
     void Calculate()
     {
@@ -734,20 +746,33 @@ public:
         torch::Tensor obs_tensor = torch::zeros({1, num_single_obs});
         for(int i = 0; i < num_single_obs; i++)
             obs_tensor[0][i] = single_step_obs.at(i);
-        std::vector<torch::jit::IValue> encoder_input;
-        torch::Tensor encoder_input_tensor = torch::zeros({1, frame_stack*num_single_obs});
+        // std::vector<torch::jit::IValue> encoder_input;
+        // torch::Tensor encoder_input_tensor = torch::zeros({1, frame_stack*num_single_obs});
+        // for(int i = 0; i < frame_stack; ++i)
+        // {
+        //     for(int j = 0; j < num_single_obs; ++j)
+        //     {
+        //         encoder_input_tensor[0][i*num_single_obs + j] = history_obs.at(i).at(j);
+        //     }
+        // }
+        // encoder_input.push_back(encoder_input_tensor);
+        // torch::Tensor encoder_output_tensor = encoder.forward(encoder_input).toTensor();
+        // std::vector<torch::jit::IValue> policy_input;
+        // torch::Tensor policy_input_tensor = torch::cat({obs_tensor, encoder_output_tensor}, 1);
+        // policy_input.push_back(policy_input_tensor);
+        // torch::Tensor policy_output_tensor = policy.forward(policy_input).toTensor();
+        
+        torch::Tensor obs_his_tensor = torch::zeros({1, frame_stack*num_single_obs});
         for(int i = 0; i < frame_stack; ++i)
         {
             for(int j = 0; j < num_single_obs; ++j)
             {
-                encoder_input_tensor[0][i*num_single_obs + j] = history_obs.at(i).at(j);
+                obs_his_tensor[0][i*num_single_obs + j] = history_obs.at(i).at(j);
             }
         }
-        encoder_input.push_back(encoder_input_tensor);
-        torch::Tensor encoder_output_tensor = encoder.forward(encoder_input).toTensor();
         std::vector<torch::jit::IValue> policy_input;
-        torch::Tensor policy_input_tensor = torch::cat({obs_tensor, encoder_output_tensor}, 1);
-        policy_input.push_back(policy_input_tensor);
+        policy_input.push_back(obs_tensor);
+        policy_input.push_back(obs_his_tensor);
         torch::Tensor policy_output_tensor = policy.forward(policy_input).toTensor();
         std::array<float, 12> actions_scaled;
         if(use_genesis)
