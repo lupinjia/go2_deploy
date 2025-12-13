@@ -197,6 +197,7 @@ public:
     std::string policy_name;
     torch::jit::script::Module policy;
 };
+
 /**
  * @brief Inheritance of BasicUserController, controller for Walk These Ways
  * 
@@ -617,7 +618,6 @@ public:
         dof_pos_scale = cfg.dof_pos_scale;
         dof_vel_scale = cfg.dof_vel_scale;
         policy_name = cfg.policy_name;
-        encoder_name = cfg.encoder_name;
         ctrl_kp = cfg.ctrl_kp;
         ctrl_kd = cfg.ctrl_kd;
         frame_stack = cfg.frame_stack;
@@ -649,9 +649,7 @@ public:
     {
         fs::path model_path = fs::current_path() / "../models";
         policy = torch::jit::load(model_path / policy_name);
-        encoder = torch::jit::load(model_path / encoder_name);
         std::cout << "Load policy from: " << model_path / policy_name << std::endl;
-        std::cout << "Load encoder from: " << model_path / encoder_name << std::endl;
     }
     void reset(BasicRobotInterface &robot_interface, Gamepad &gamepad)
     {
@@ -720,21 +718,6 @@ public:
         policy_input.push_back(obs_tensor);
         policy_input.push_back(obs_his_tensor);
         torch::Tensor policy_output_tensor = policy.forward(policy_input).toTensor();
-        // std::vector<torch::jit::IValue> encoder_input;
-        // torch::Tensor encoder_input_tensor = torch::zeros({1, frame_stack*num_single_obs});
-        // for(int i = 0; i < frame_stack; ++i)
-        // {
-        //     for(int j = 0; j < num_single_obs; ++j)
-        //     {
-        //         encoder_input_tensor[0][i*num_single_obs + j] = history_obs.at(i).at(j);
-        //     }
-        // }
-        // encoder_input.push_back(encoder_input_tensor);
-        // torch::Tensor encoder_output_tensor = encoder.forward(encoder_input).toTensor();
-        // std::vector<torch::jit::IValue> policy_input;
-        // torch::Tensor policy_input_tensor = torch::cat({obs_tensor, encoder_output_tensor}, 1);
-        // policy_input.push_back(policy_input_tensor);
-        // torch::Tensor policy_output_tensor = policy.forward(policy_input).toTensor();
     }
     void Calculate()
     {
@@ -746,22 +729,6 @@ public:
         torch::Tensor obs_tensor = torch::zeros({1, num_single_obs});
         for(int i = 0; i < num_single_obs; i++)
             obs_tensor[0][i] = single_step_obs.at(i);
-        // std::vector<torch::jit::IValue> encoder_input;
-        // torch::Tensor encoder_input_tensor = torch::zeros({1, frame_stack*num_single_obs});
-        // for(int i = 0; i < frame_stack; ++i)
-        // {
-        //     for(int j = 0; j < num_single_obs; ++j)
-        //     {
-        //         encoder_input_tensor[0][i*num_single_obs + j] = history_obs.at(i).at(j);
-        //     }
-        // }
-        // encoder_input.push_back(encoder_input_tensor);
-        // torch::Tensor encoder_output_tensor = encoder.forward(encoder_input).toTensor();
-        // std::vector<torch::jit::IValue> policy_input;
-        // torch::Tensor policy_input_tensor = torch::cat({obs_tensor, encoder_output_tensor}, 1);
-        // policy_input.push_back(policy_input_tensor);
-        // torch::Tensor policy_output_tensor = policy.forward(policy_input).toTensor();
-        
         torch::Tensor obs_his_tensor = torch::zeros({1, frame_stack*num_single_obs});
         for(int i = 0; i < frame_stack; ++i)
         {
@@ -843,9 +810,7 @@ public:
     float action_scale;
     // NN model
     std::string policy_name;
-    std::string encoder_name;
     torch::jit::script::Module policy;
-    torch::jit::script::Module encoder;
 
 private:
     void fill_single_step_obs()

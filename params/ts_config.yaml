@@ -1,5 +1,4 @@
 policy_name: "policy_ts.pt"
-encoder_name: "ts_encoder.pt"
 use_genesis: True
 dt: 0.02
 stand_kp: 60.0

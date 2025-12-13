@@ -174,7 +174,6 @@ namespace unitree::common
             try
             {
                 policy_name = cfg["policy_name"].as<std::string>();
-                encoder_name = cfg["encoder_name"].as<std::string>();
                 use_genesis = cfg["use_genesis"].as<bool>();
                 dt = cfg["dt"].as<float>();
                 stand_kp = cfg["stand_kp"].as<float>();
