@@ -1,4 +1,4 @@
-policy_name: "policy_ts.pt"
+policy_name: "policy_ts_gs.pt"
 use_genesis: True
 dt: 0.02
 stand_kp: 60.0

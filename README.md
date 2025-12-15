@@ -62,39 +62,62 @@ Deployment code of RL policy on Unitree Go2 robot, using policies from [genesis_
       make -j4
       ```
 
-5. Simulate in mujoco
+## Sim2Sim
+
+1. Start the simulation
    ```bash
    # Start mujoco simulation
    cd unitree_mujoco/simulate/build
    ./unitree_mujoco
-   # Start Controller
-   cd ../../../build
-   ./go2_deploy
-   # R1 -> SIT Mode
-   # R2 -> STAND Mode
-   # A -> CTRL Mode
-   # Y -> DAMPING Mode
    ```
 
-6. Deploy to real robot
+2. Start the controller
    ```bash
-   # Check your ethernet interface name
-   ifconfig
-   # Start controller
-   ./go2_deploy ethernet_name
+   cd go2_deploy/build
+   # wtw controller
+   ./go2_deploy wtw
+   # ts controller
+   ./go2_deploy ts
    ```
+3. Play with the joystick
+   - Common state machine logic:
+      - L1 + R1 -> Sit
+      - L1 + R2 -> Stand
+      - L1 + A -> Ctrl
+      - L1 + Y -> Stop
+   - For wtw controller:
+      - left: gait period ⬆️
+      - right: gait period ⬇️
+      - up: base height ⬆️
+      - down: base height ⬇️
+      - A: foot clearance ⬆️
+      - B: foot clearance ⬇️
+      - X: pitch angle ⬆️
+      - Y: pitch angle ⬇️
+      - R1 and R2: change gait type
 
-## Usage
+## Sim2Real
 
-1. To customize your own RL inference code, you need to create a new class in `include/user_controller.hpp` inheriting `BasicUserController`. An example RLController has been provided, which implements NN inference using basic apis of libtorch and double ended queue.
-2. It's recommended to first simulate in mujoco and then deploy to real robot to avoid potential collapse.
-3. Training code can be found in [genesis_lr](https://github.com/lupinjia/genesis_lr)
+```bash
+# Check your ethernet interface name
+ifconfig
+# wtw controller
+./go2_deploy wtw ethernet_name
+# ts controller
+./go2_deploy ts ethernet_name
+```
 
 ## Demo
 
-- Tuning robot behavior using [walk these ways](https://github.com/Improbable-AI/walk-these-ways) style
-  
-   [video link](https://www.bilibili.com/video/BV1FPedzZEdi/)
+| Controller Type | GIF | Training Code |
+|--- | --- | --- |
+|  Walk These Ways  | ![](https://raw.githubusercontent.com/lupinjia/demo_imgs/refs/heads/master/wtw_demo.gif) | [genesis_lr/go2_wtw](https://github.com/lupinjia/genesis_lr/tree/main/legged_gym/envs/go2/go2_wtw) |
+| Teacher-Student | ![](https://raw.githubusercontent.com/lupinjia/demo_imgs/refs/heads/master/ts_demo.gif) | [genesis_lr/go2_ts](https://github.com/lupinjia/genesis_lr/tree/main/legged_gym/envs/go2/go2_ts) |
+
+## Tips
+
+1. To customize your own RL inference code, you need to create a new class in `include/user_controller.hpp` inheriting `BasicUserController`. An example RLController has been provided, which implements NN inference using basic apis of libtorch and double ended queue.
+2. It's recommended to first simulate in mujoco and then deploy to real robot to avoid potential collapse.
 
 ## Acknowledgement
 
