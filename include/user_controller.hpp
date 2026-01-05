@@ -133,15 +133,15 @@ public:
     }
     void Calculate()
     {
+        obs.at(0) = cmd.at(0) * lin_vel_scale;
+        obs.at(1) = cmd.at(1) * lin_vel_scale;
+        obs.at(2) = cmd.at(2) * ang_vel_scale;
         // Fill observation
         for(int i = 0; i < 3; ++i)
         {
-            obs.at(i) = base_ang_vel.at(i) * ang_vel_scale;
             obs.at(3 + i) = projected_gravity.at(i);
+            obs.at(6 + i) = base_ang_vel.at(i) * ang_vel_scale;
         }
-        obs.at(6) = cmd.at(0) * lin_vel_scale;
-        obs.at(7) = cmd.at(1) * lin_vel_scale;
-        obs.at(8) = cmd.at(2) * ang_vel_scale;
         for(int i = 0; i < 12; ++i)
         {
             obs.at(9 + i) = jpos_processed.at(i) * dof_pos_scale;

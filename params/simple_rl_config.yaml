@@ -1,4 +1,4 @@
-policy_name: "simple_rl_model.pt"
+policy_name: "Jan05_09-43-56_simple_rl_genesis.pt"
 dt: 0.02
 stand_kp: 60.0
 stand_kd: 5.0
