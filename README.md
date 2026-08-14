@@ -1,6 +1,8 @@
 # go2_deploy
 
-Deployment code of RL policy on Unitree Go2 robot, using policies from [genesis_lr](https://github.com/lupinjia/genesis_lr). This framework is based on the [state machine example from Unitree Doc](https://support.unitree.com/home/zh/developer/LowLevel_Ctrl_Framework) and conducts neural network inference via [LibTorch](https://pytorch.org/).
+Deployment code of RL policy on Unitree Go2 robot, using policies from [genesis_lr](https://github.com/lupinjia/genesis_lr). This framework is based on the [state machine example from Unitree Doc](https://support.unitree.com/home/zh/developer/LowLevel_Ctrl_Framework) and conducts neural network inference via **onnxruntime C++ API**.
+
+Single controller type (`Go2OnnxController`) reads all deployment parameters (joint order, PD gains, default pose, action scale, observation terms/scales/clips/history) from the ONNX model's `metadata_props` (mjlab exporter convention, same as [booster_deploy_cpp](https://github.com/lupinjia/booster_deploy_cpp)), and builds the observation **term-major** via `ObservationBuilder` (compute -> clip -> scale -> history per term).
 
 ## Platform
 
@@ -19,16 +21,9 @@ Deployment code of RL policy on Unitree Go2 robot, using policies from [genesis_
    sudo make install
    ```
 
-2. Install [LibTorch](https://pytorch.org/)
+2. Install [yaml-cpp](https://github.com/jbeder/yaml-cpp)
    ```bash
-   # For Nvidia Jetson
-   wget https://download.pytorch.org/libtorch/cu118/libtorch-cxx11-abi-shared-with-deps-2.7.1%2Bcu118.zip # modify cuda version
-   # For x86_64 PC
-   wget https://download.pytorch.org/libtorch/cpu/libtorch-shared-with-deps-2.8.0%2Bcpu.zip
-
-   # unzip the file and get libtorch folder
-   # the CMAKE_PREFIX_PATH in CMakeLists.txt should be modified according to your installation path of libtorch
-   set(CMAKE_PREFIX_PATH /home/username/libtorch)     # in CMakeLists.txt
+   sudo apt install libyaml-cpp-dev
    ```
 
 3. Clone this repo and compile
@@ -62,6 +57,18 @@ Deployment code of RL policy on Unitree Go2 robot, using policies from [genesis_
       make -j4
       ```
 
+## ONNX model
+
+Place your policy ONNX model in `models/` and set `policy_name` in `params/go2_config.yaml`.
+The model must carry mjlab-style `metadata_props` (as used by booster_deploy_cpp):
+
+- `joint_names` / `joint_stiffness` / `joint_damping` / `default_joint_pos`
+- `action_scale` (scalar or per-joint)
+- `observation_names` / `obs_scale.<term>` / `observation_terms_clip` / `observation_terms_history_length`
+- `actor_obs_dim` / `actor_history_length` / `actor_flatten_history_dim`
+
+Only `policy_name`, `dt`, transition PD gains and `sit_pos` are configured in yaml; everything else comes from the model metadata.
+
 ## Sim2Sim
 
 1. Start the simulation
@@ -74,10 +81,7 @@ Deployment code of RL policy on Unitree Go2 robot, using policies from [genesis_
 2. Start the controller
    ```bash
    cd go2_deploy/build
-   # wtw controller
-   ./go2_deploy wtw
-   # ts controller
-   ./go2_deploy ts
+   ./go2_deploy
    ```
 3. Play with the joystick
    - Common state machine logic:
@@ -85,41 +89,42 @@ Deployment code of RL policy on Unitree Go2 robot, using policies from [genesis_
       - L1 + R2 -> Stand
       - L1 + A -> Ctrl
       - L1 + Y -> Stop
-   - For wtw controller:
-      - left: gait period ⬆️
-      - right: gait period ⬇️
-      - up: base height ⬆️
-      - down: base height ⬇️
-      - A: foot clearance ⬆️
-      - B: foot clearance ⬇️
-      - X: pitch angle ⬆️
-      - Y: pitch angle ⬇️
-      - R1 and R2: change gait type
 
 ## Sim2Real
 
 ```bash
 # Check your ethernet interface name
 ifconfig
-# wtw controller
-./go2_deploy wtw ethernet_name
-# ts controller
-./go2_deploy ts ethernet_name
+# run with the ethernet interface name
+./go2_deploy ethernet_name
 ```
 
-## Demo
+## Architecture
 
-| Controller Type | GIF | Training Code |
-|--- | --- | --- |
-|  Walk These Ways  | ![](https://raw.githubusercontent.com/lupinjia/demo_imgs/refs/heads/master/wtw_demo.gif) | [genesis_lr/go2_wtw](https://github.com/lupinjia/genesis_lr/tree/main/legged_gym/envs/go2/go2_wtw) |
-| Teacher-Student | ![](https://raw.githubusercontent.com/lupinjia/demo_imgs/refs/heads/master/ts_demo.gif) | [genesis_lr/go2_ts](https://github.com/lupinjia/genesis_lr/tree/main/legged_gym/envs/go2/go2_ts) |
+```
+go2_deploy/
+├── include/
+│   ├── robot_controller.hpp      # 框架：DDS 通道 + 状态机 + 50Hz 控制线程 + 500Hz 命令线程
+│   ├── robot_interface.hpp       # Go2RobotInterface + go2_joint_names()（真机关节顺序）
+│   ├── user_controller.hpp       # BasicUserController 接口 + Go2OnnxController（ORT 推理）
+│   ├── onnx_metadata.hpp         # ONNX metadata 解析（booster_deploy_cpp 移植）
+│   ├── observation_builder.hpp   # 观测构建器（term-major，compute -> clip -> scale -> history）
+│   ├── gamepad.hpp               # 手柄解析
+│   ├── state_machine.hpp         # 状态机：DAMPING -> SIT -> STAND -> CTRL
+│   └── conversion.hpp            # 四元数/欧拉角/CRC 工具
+├── src/main.cpp
+├── params/go2_config.yaml        # 部署配置（policy_name/dt/PD 增益/sit_pos）
+├── models/                       # ONNX 策略模型
+└── third_party/onnxruntime/      # 本地化 onnxruntime C++ SDK（头文件 + lib）
+```
 
 ## Tips
 
-1. To customize your own RL inference code, you need to create a new class in `include/user_controller.hpp` inheriting `BasicUserController`. An example RLController has been provided, which implements NN inference using basic apis of libtorch and double ended queue.
+1. To customize your own RL inference code, extend the observation terms in `observation_builder.hpp` (each term implements `compute_raw`), keyed by the `observation_names` from the ONNX metadata.
 2. It's recommended to first simulate in mujoco and then deploy to real robot to avoid potential collapse.
 
 ## Acknowledgement
 
 - [unitree_sdk2](https://github.com/unitreerobotics/unitree_sdk2)
 - [unitree_mujoco](https://github.com/unitreerobotics/unitree_mujoco/tree/main)
+- [booster_deploy_cpp](https://github.com/lupinjia/booster_deploy_cpp) (onnx_metadata / observation_builder / onnxruntime vendoring)

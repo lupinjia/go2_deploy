@@ -61,7 +61,7 @@ namespace unitree::common
             // 计算插值百分比
             standing_percent = (float)standing_count / standing_duration;
             // 计算期望位置
-            for (int i = 0; i < 12; i++)
+            for (size_t i = 0; i < ctrl.jpos_des.size(); i++)
             {
                 ctrl.jpos_des.at(i) = (1 - standing_percent)*ctrl.start_pos.at(i) + standing_percent*ctrl.stand_pos.at(i);
             }
@@ -119,7 +119,7 @@ namespace unitree::common
             // 计算插值百分比
             sitting_percent = (float)sitting_count / sitting_duration;
             // 计算期望位置
-            for (int i = 0; i < 12; i++)
+            for (size_t i = 0; i < ctrl.jpos_des.size(); i++)
             {
                 ctrl.jpos_des.at(i) = (1 - sitting_percent)*ctrl.start_pos.at(i) + sitting_percent*ctrl.sit_pos.at(i);
             }

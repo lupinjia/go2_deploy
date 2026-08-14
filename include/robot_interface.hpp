@@ -2,7 +2,8 @@
 
 #include <array>
 #include <iostream>
-#include "common/mathTools.h"
+#include <string>
+#include <vector>
 
 #include "comm.h"
 #include "unitree/idl/go2/LowState_.hpp"
@@ -15,18 +16,33 @@ namespace unitree::common
     constexpr double PosStopF = (2.146E+9f);
     constexpr double VelStopF = (16000.0f);
 
-    class BasicRobotInterface
+    // Go2 real-robot joint order (unitree lowstate motor order).
+    // Policy ONNX metadata joint_names (sim order) are remapped onto this
+    // order by name in ObservationBuilder.
+    inline std::vector<std::string> go2_joint_names()
+    {
+        return {
+            "FR_hip_joint", "FR_thigh_joint", "FR_calf_joint",
+            "FL_hip_joint", "FL_thigh_joint", "FL_calf_joint",
+            "RR_hip_joint", "RR_thigh_joint", "RR_calf_joint",
+            "RL_hip_joint", "RL_thigh_joint", "RL_calf_joint"};
+    }
+
+    class Go2RobotInterface
     {
     public:
-        BasicRobotInterface()
+        explicit Go2RobotInterface(const std::vector<std::string> &joint_names)
+            : joint_names_(joint_names)
         {
-            jpos_des.fill(0.);
-            jvel_des.fill(0.);
-            kp.fill(0.);
-            kd.fill(0.);
-            tau_ff.fill(0.);
-            projected_gravity.fill(0.);
-            projected_gravity.at(2) = -1.0;
+            size_t n = joint_names_.size();
+            jpos.assign(n, 0.f);
+            jvel.assign(n, 0.f);
+            tau.assign(n, 0.f);
+            jpos_des.assign(n, 0.f);
+            jvel_des.assign(n, 0.f);
+            kp.assign(n, 0.f);
+            kd.assign(n, 0.f);
+            tau_ff.assign(n, 0.f);
         }
         /**
          * @brief 将接收到的底层状态保存到robot_interface中
@@ -45,7 +61,8 @@ namespace unitree::common
 
             // motor
             const std::array<unitree_go::msg::dds_::MotorState_, 20> &motor = state.motor_state();
-            for (size_t i = 0; i < 12; ++i)
+            size_t n = std::min<size_t>(12, jpos.size());
+            for (size_t i = 0; i < n; ++i)
             {
                 const unitree_go::msg::dds_::MotorState_ &m = motor.at(i);
                 jpos.at(i) = m.q();
@@ -54,12 +71,19 @@ namespace unitree::common
             }
         }
 
-        std::array<float, 12> jpos, jvel, tau;
+        const std::vector<std::string> &joint_names() const { return joint_names_; }
+
+        // observed state (real robot order)
+        std::vector<float> jpos, jvel, tau;
         std::array<float, 4> quat;
         std::array<float, 3> rpy, gyro, projected_gravity, acc;
-        std::array<float, 12> jpos_des, jvel_des, kp, kd, tau_ff;
+
+        // desired state (real robot order)
+        std::vector<float> jpos_des, jvel_des, kp, kd, tau_ff;
 
     private:
+        std::vector<std::string> joint_names_;
+
         inline void UpdateProjectedGravity()
         {
             // inverse quat

@@ -50,14 +50,6 @@ public:
         std::stringstream header;
         header << "state,";
         header << "cmd_lin_x,cmd_lin_y,cmd_ang_z,";
-        header << "projected_g0,projected_g1,projected_g2,";
-        header << "base_ang_vel_x,base_ang_vel_y,base_ang_vel_z,";
-        header << "jpos0,jpos1,jpos2,jpos3,jpos4,jpos5,jpos6,jpos7,jpos8,jpos9,jpos10,jpos11,";
-        header << "jvel0,jvel1,jvel2,jvel3,jvel4,jvel5,jvel6,jvel7,jvel8,jvel9,jvel10,jvel11,";
-        header << "action0,action1,action2,action3,action4,action5,action6,action7,action8,action9,action10,action11,";
-        header << "clock0,clock1,clock2,clock3,";
-        header << "gait_period,base_height_target,foot_clearance_target,pitch_target,";
-        header << "theta0,theta1,theta2,theta3";
         header << std::endl;
         log_file << header.str();
     }
@@ -144,7 +136,6 @@ protected:
 
     RLStateMachine state_machine;
     BasicUserController* ctrl;
-    BasicRobotInterface robot_interface;
 
     std::mutex state_mutex, cmd_mutex;
 
@@ -164,7 +155,7 @@ private:
         state = *(unitree_go::msg::dds_::LowState_ *)message;
         {
             std::lock_guard<std::mutex> lock(state_mutex);
-            robot_interface.SetState(state);
+            ctrl->robot().SetState(state);
         }
     }
 
@@ -206,13 +197,15 @@ private:
 
     void set_cmd()
     {
-        for(int i = 0; i < 12; i++)
+        auto &robot = ctrl->robot();
+        size_t n = robot.jpos_des.size();
+        for(size_t i = 0; i < n; i++)
         {
-            cmd.motor_cmd()[i].q() = robot_interface.jpos_des.at(i);
-            cmd.motor_cmd()[i].dq() = robot_interface.jvel_des.at(i);
-            cmd.motor_cmd()[i].kp() = robot_interface.kp.at(i);
-            cmd.motor_cmd()[i].kd() = robot_interface.kd.at(i);
-            cmd.motor_cmd()[i].tau() = robot_interface.tau_ff.at(i);
+            cmd.motor_cmd()[i].q() = robot.jpos_des.at(i);
+            cmd.motor_cmd()[i].dq() = robot.jvel_des.at(i);
+            cmd.motor_cmd()[i].kp() = robot.kp.at(i);
+            cmd.motor_cmd()[i].kd() = robot.kd.at(i);
+            cmd.motor_cmd()[i].tau() = robot.tau_ff.at(i);
         }
         cmd.crc() = crc32_core((uint32_t *)&cmd, (sizeof(unitree_go::msg::dds_::LowCmd_)>>2)-1);
     }
@@ -270,7 +263,7 @@ private:
         // 读取状态信息
         {
             std::lock_guard<std::mutex> lock(state_mutex);
-            ctrl->GetInput(robot_interface, gamepad);
+            ctrl->GetInput(ctrl->robot(), gamepad);
         }
         // 根据状态判断具体执行哪个状态下的处理函数
         if(state_machine.state == STATES::SIT)
@@ -345,13 +338,14 @@ private:
         // 保存初始关节位置
         {
             std::lock_guard<std::mutex> lock(state_mutex);
-            ctrl->save_jpos(robot_interface);
+            ctrl->save_jpos(ctrl->robot());
         }
-        robot_interface.jpos_des = ctrl->start_pos; // 由阻尼状态的初始位置开始
-        robot_interface.jvel_des.fill(0.);
-        robot_interface.kp.fill(ctrl->stand_kp);
-        robot_interface.kd.fill(ctrl->stand_kd);
-        robot_interface.tau_ff.fill(0.);
+        auto &robot = ctrl->robot();
+        robot.jpos_des = ctrl->start_pos; // 由阻尼状态的初始位置开始
+        std::fill(robot.jvel_des.begin(), robot.jvel_des.end(), 0.f);
+        std::fill(robot.kp.begin(), robot.kp.end(), ctrl->stand_kp());
+        std::fill(robot.kd.begin(), robot.kd.end(), ctrl->stand_kd());
+        std::fill(robot.tau_ff.begin(), robot.tau_ff.end(), 0.f);
     }
     /**
      * @brief 站立状态回调函数
@@ -362,41 +356,48 @@ private:
         // 保存初始关节位置
         {
             std::lock_guard<std::mutex> lock(state_mutex);
-            ctrl->save_jpos(robot_interface);
+            ctrl->save_jpos(ctrl->robot());
         }
-        robot_interface.jpos_des = ctrl->start_pos; // 由阻尼状态的初始位置开始
-        robot_interface.jvel_des.fill(0.);
-        robot_interface.kp.fill(ctrl->stand_kp);
-        robot_interface.kd.fill(ctrl->stand_kd);
-        robot_interface.tau_ff.fill(0.);
+        auto &robot = ctrl->robot();
+        robot.jpos_des = ctrl->start_pos; // 由阻尼状态的初始位置开始
+        std::fill(robot.jvel_des.begin(), robot.jvel_des.end(), 0.f);
+        std::fill(robot.kp.begin(), robot.kp.end(), ctrl->stand_kp());
+        std::fill(robot.kd.begin(), robot.kd.end(), ctrl->stand_kd());
+        std::fill(robot.tau_ff.begin(), robot.tau_ff.end(), 0.f);
     }
 
     void CtrlCallback()
     {
         // 重置状态
-        ctrl->reset(robot_interface, gamepad);
+        {
+            std::lock_guard<std::mutex> lock(state_mutex);
+            ctrl->reset(ctrl->robot(), gamepad);
+        }
 
-        robot_interface.jpos_des = ctrl->stand_pos;
-        robot_interface.jvel_des.fill(0.);
-        robot_interface.kp.fill(ctrl->ctrl_kp);
-        robot_interface.kd.fill(ctrl->ctrl_kd);
-        robot_interface.tau_ff.fill(0.);
+        auto &robot = ctrl->robot();
+        robot.jpos_des = ctrl->stand_pos_real();
+        std::fill(robot.jvel_des.begin(), robot.jvel_des.end(), 0.f);
+        robot.kp = ctrl->kp();  // metadata per-joint gains
+        robot.kd = ctrl->kd();
+        std::fill(robot.tau_ff.begin(), robot.tau_ff.end(), 0.f);
+        std::cout << "Ctrl enabled." << std::endl;
     }
 
     void Damping(float kd = 3.0)
     {
-        robot_interface.jpos_des.fill(0.);
-        robot_interface.jvel_des.fill(0.);
-        robot_interface.kp.fill(0.);
-        robot_interface.kd.fill(kd);
-        robot_interface.tau_ff.fill(0.);
+        auto &robot = ctrl->robot();
+        std::fill(robot.jpos_des.begin(), robot.jpos_des.end(), 0.f);
+        std::fill(robot.jvel_des.begin(), robot.jvel_des.end(), 0.f);
+        std::fill(robot.kp.begin(), robot.kp.end(), 0.f);
+        std::fill(robot.kd.begin(), robot.kd.end(), kd);
+        std::fill(robot.tau_ff.begin(), robot.tau_ff.end(), 0.f);
     }
 
     void Sitting(float kp = 60.0, float kd = 5.0)
     {
         state_machine.Sitting(*ctrl);
 
-        robot_interface.jpos_des = ctrl->jpos_des;
+        ctrl->robot().jpos_des = ctrl->jpos_des;
     }
 
     void Standing(float kp = 60.0, float kd = 5.0)
@@ -405,16 +406,19 @@ private:
 
         state_machine.Standing(*ctrl);
 
-        robot_interface.jpos_des = ctrl->jpos_des;
+        ctrl->robot().jpos_des = ctrl->jpos_des;
     }
 
     void UserControlStep(bool send_cmd = false)
     {
-        ctrl->Calculate();
+        {
+            std::lock_guard<std::mutex> lock(state_mutex);
+            ctrl->Calculate();
+        }
 
         if (send_cmd)
         {
-            robot_interface.jpos_des = ctrl->jpos_des;
+            ctrl->robot().jpos_des = ctrl->jpos_des;
         }
         
     }

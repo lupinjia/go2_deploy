@@ -2,5 +2,6 @@
 .vscode
 
 build
-
+build_*
 logs
+.omo

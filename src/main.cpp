@@ -37,44 +37,25 @@ int main(int argc, char const *argv[])
     fs::path log_file_name = log_folder / "log.csv";
 
     /***** Controller *****/
-    if (argc < 3) // local loopback
+    if (argc < 2) // local loopback
     {
         ChannelFactory::Instance()->Init(1, "lo"); // "lo" for local loopback
     }
     else // real robot
     {
-        ChannelFactory::Instance()->Init(0, argv[2]);
+        ChannelFactory::Instance()->Init(0, argv[1]);
     }
 
-    BasicUserController* user_ctrl;
-    // load config and user_controller according to the argument
-    if(argv[1] == std::string("simple_rl"))
-    {
-        std::string config_file_dir = param / "simple_rl_config.yaml";
-        user_ctrl = new SimpleRLController(config_file_dir);
-    }
-    else if(argv[1] == std::string("wtw"))
-    {
-        std::string config_file_dir = param / "wtw_config.yaml";
-        user_ctrl = new WTWController(config_file_dir);
-    }
-    else if(argv[1] == std::string("ts"))
-    {
-        std::string config_file_dir = param / "ts_config.yaml";
-        user_ctrl = new TSController(config_file_dir);
-    }
-    else
-    {
-        std::cerr << "Unknown controller type: " << argv[1] << std::endl;
-        return -1;
-    }
+    // load config and user_controller
+    std::string config_file_dir = (param / "go2_config.yaml").string();
+    BasicUserController* user_ctrl = new Go2OnnxController(config_file_dir, go2_joint_names());
 
     RobotController* robot_controller = new RobotController(log_file_name, user_ctrl);
     // load neural network model
     robot_controller->loadParam();
     robot_controller->loadPolicy();
 
-    if (argc >= 3)
+    if (argc >= 2)
     {
         // deactivate the mcf service
         robot_controller->initRobotStateClient();
