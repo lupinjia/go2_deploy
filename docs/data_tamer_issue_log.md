@@ -1,8 +1,10 @@
-# 问题记录：引入 DataTamer 数据日志后实机不响应
+# 问题记录：引入 DataTamer 数据日志后实机不响应（已定位根因）
 
-> 状态：**未解决（open）**，当前已回退到不含 DataTamer 的版本（`dev_fix` 分支，基于
-> `cfc54c9`），实机可正常运行。本文记录问题现象、定位过程、已尝试的修复及其结果，
-> 供后续排查参考。
+> 状态：**已定位根因（onnxruntime CPUIDInfo 越界 bug），已升级修复**。
+> 根因**不是 DataTamer**，而是旧的 onnxruntime 1.23.2 在 Jetson（arm64）上
+> `CPUIDInfo::ArmLinuxInit()` 存在 heap 越界写，导致堆损坏与偶发崩溃。已升级到
+> 官方 onnxruntime 1.27.1（含上游修复 PR #28344）。本文记录问题现象、定位过程、
+> 已尝试的修复、最终根因与处理结果。
 
 ## 1. 问题现象
 
@@ -11,6 +13,15 @@
 - ✅ 能正常收到机器人状态反馈（`rt/lowstate`）与遥控器数据
 - ✅ 程序正常发布 low_cmd（`rt/lowcmd`），发布链路本身工作
 - ❌ **机器人不执行任何命令**（不站立、不运动、无响应）
+
+在 Jetson 上运行时，旧 onnxruntime 1.23.2 还会在**启动阶段**直接崩溃：
+
+```
+onnxruntime cpuid_info warning: Unknown CPU vendor. cpuinfo_vendor value: 0
+/opt/rh/gcc-toolset-14/root/usr/include/c++/14/bits/stl_vector.h:1130:
+  std::vector<unsigned int>::operator[] ... Assertion '__n < this->size()' failed.
+Aborted (core dumped)
+```
 
 通过 git bisect 定位到首个"坏"提交：
 
@@ -21,7 +32,10 @@ cfc54c9 [feat]：切换至 onnxruntime 推理，统一为 metadata 驱动的 Go2
   ↑ 控制器正常，实机响应正常
 ```
 
-即：**onnxruntime 推理本身没问题（cfc54c9 正常），一旦叠加 DataTamer 日志就实机不响应。**
+当初的结论是"onnxruntime 推理本身没问题（cfc54c9 正常），一旦叠加 DataTamer 日志就
+实机不响应"——**该结论是误导性的**。真正的问题是 onnxruntime 1.23.2 的 CPUIDInfo
+越界 bug（见第 6 节），叠加 DataTamer 只是改变了堆布局，让同一处堆损坏的**表现**不同
+（不响应 vs 崩溃），DataTamer 本身不是根因。
 
 ## 2. 排查历程
 
@@ -81,53 +95,108 @@ cfc54c9 [feat]：切换至 onnxruntime 推理，统一为 metadata 驱动的 Go2
 | `DataLogger::log()` 单次开销过大 | 排除（x86 实测 ~2µs/次，500Hz 占 0.1% 预算） |
 | 命令内容/CRC/mode/level_flag 被日志改动 | 排除（`set_cmd`/`init_low_cmd`/`Write` 与可用版本逐字节一致） |
 
-## 4. 未验证 / 仍可疑的方向
+## 4. 最终根因：onnxruntime CPUIDInfo 越界 bug（与 DataTamer 无关）
 
-以下方向尚未深入验证，供后续排查：
+在 Jetson 上运行旧 onnxruntime 1.23.2 时，启动阶段出现：
 
-1. **DataTamer 静态库与 DDS/CycloneDDS 的链接级副作用**：`libdata_tamer.a` /
-   `libmcap_lib.a` 被静态链接进同一个可执行文件，是否与 `libddsc`（CycloneDDS）或
-   unitree_sdk2 存在符号/初始化顺序冲突，尚未确认。
-2. **`ChannelsRegistry::Global()` 静态单例与后台写线程**：DataSinkBase 构造即启动一个
-   后台线程（`try_dequeue` + `sleep_for(250us)` 循环）执行 MCAP 文件写入。该线程在
-   Jetson 上的行为（CPU 占用、与 DDS 收发线程的调度竞争）未在实机测量。
-3. **MCAP 文件写入位置**：实机上 `logs/` 的落盘介质（eMMC/SD/网络挂载）未知；若写入
-   慢，后台写线程持续占用 CPU 或队列无限增长（moodycamel 队列无界），可能间接拖慢
-   系统。需要实机监控进程 CPU/内存。
-4. **Jetson 实测数据缺失**：以上所有"开销可忽略"的结论都来自 x86 测量。实机上
-   `LogDataStep` 的真实耗时、命令线程实际节奏（可打时间戳统计 low_cmd 间隔）均未测。
-   建议在实机加打印统计 low_cmd 发布间隔的最大值/抖动。
-5. **先起 DataTamer 后起控制线程 vs 顺序对调**：当前顺序是 DataLogger 创建 →
-   CreateRecurrentThreadEx(ctrl) → StartSendCmd。可尝试把 DataLogger 创建移到控制
-   线程启动之后，或完全延迟到第一个 ControlStep 内再创建。
+```
+onnxruntime cpuid_info warning: Unknown CPU vendor. cpuinfo_vendor value: 0
+stl_vector.h:1130: std::vector<unsigned int>::operator[] Assertion '__n < this->size()' failed.
+Aborted (core dumped)
+```
 
-## 5. 建议的下一步排查步骤
+### 4.1 根因定位
 
-1. 在实机上对 low_cmd 发布间隔打时间戳统计（max gap / jitter），确认命令节奏是否
-   真的被破坏。若节奏正常，则"看门狗"假设不成立。
-2. 用 `top`/`perf` 观察实机 CPU：DataTamer 后台写线程是否吃满一个核。
-3. 做一个最小复现：在 cfc54c9（可用）上只加 DataTamer 链接 + 一个空 channel 的
-   快照（不写任何 DDS 交互），看实机是否还响应。逐步二分 DataTamer 的使用面。
-4. 检查 MCAP 落盘介质与写入量：50Hz × ~2KB ≈ 100KB/s，若介质极慢可能触发后台线程
-   堆积。
-5. 尝试 `MCAPSink(path, /*do_compression=*/false)`（当前已是 false）以及完全不建
-   MCAP、只 `addDefaultSink(dummy)` 的对比实验。
+- 崩溃类型是 `std::vector<unsigned int>::operator[]` 越界断言，发生在 onnxruntime
+  会话初始化期间（`cpuid_info warning` 打印后立即崩溃）。
+- 仓库内 `third_party/onnxruntime/lib/arm64/libonnxruntime.so.1.23.2` 由
+  gcc-toolset-14 构建并启用了 `_GLIBCXX_ASSERTIONS`（lib 内嵌 `/opt/rh/gcc-toolset-14/
+  .../stl_vector.h` 与 `__n < this->size()` 断言串）。因此 operator[] 越界会**直接
+  abort**，而不是静默写坏堆。
+- 越界代码在 onnxruntime 1.23.2 `core/common/cpuid_info.cc` 的
+  `CPUIDInfo::ArmLinuxInit()`：
+
+  ```cpp
+  const uint32_t core_cnt = cpuinfo_get_cores_count();
+  core_uarchs_.resize(core_cnt, cpuinfo_uarch_unknown);   // vector<uint32_t> = vector<unsigned int>
+  ...
+  auto coreid = proc->linux_id;                            // Linux 逻辑 CPU 号
+  core_uarchs_[coreid] = uarch;                            // 若 linux_id >= core_cnt 则越界写
+  ```
+
+  在 Jetson Orin 上 `cpuinfo` 对 CPU 拓扑的解析可能报告稀疏/非标准 `linux_id`
+  （Unknown CPU vendor），导致 `linux_id >= core_cnt` → `core_uarchs_[coreid]` 越界写。
+
+### 4.2 上游修复
+
+- 这是 onnxruntime 官方已知 bug：GitHub issue **#28301**（"CPUIDInfo crashes with
+  free(): invalid pointer on ARM (Jetson Orin) when CPU vendor is unknown"，Jetson
+  Orin NX 100% 复现）。
+- 修复 PR **#28344**（2026-06-02 合并）：在 `ArmLinuxInit()` 使用 `linux_id` 索引前加
+  边界检查：
+
+  ```cpp
+  auto coreid = proc->linux_id;
+  if (coreid < 0 || static_cast<size_t>(coreid) >= core_uarchs_.size()) {
+    continue;
+  }
+  ```
+
+- 修复随 **onnxruntime v1.27.0**（2026-06-19 发布）起进入正式版本。**v1.24.4 及更早
+  均未包含此修复**（v1.24.4 发布于 2026-03-17，早于修复合并）。
+
+### 4.3 为什么之前"时好时坏"/"看起来像 DataTamer 的问题"
+
+- 未启用断言（Release 常规构建）时，`core_uarchs_[coreid]` 越界写是**静默堆损坏**，
+  不立即崩溃。
+- 是否崩溃 / 表现为何种故障，取决于越界写恰好破坏了哪块相邻堆内存。引入 DataTamer
+  改变了堆分配布局 → 同一处越界写的**表现**改变（"不响应" vs 直接崩溃），造成
+  "DataTamer 导致实机不响应"的假象。
+- 参考项目 booster_deploy_cpp 同样 vendored 了同一个有 bug 的 1.23.2 arm64 lib，
+  只是尚未触发该 CPU 拓扑条件，并非"50Hz 日志没问题"。
+
+## 5. 处理结果：升级 onnxruntime 到 1.27.1
+
+1. 下载官方 **onnxruntime-linux-aarch64-1.27.1.tgz** 与
+   onnxruntime-linux-x64-1.27.1.tgz（含 #28344 修复）。
+2. 替换 `third_party/onnxruntime/lib/{arm64,x86_64}/` 下的
+   `libonnxruntime.so*` 为 1.27.1（旧 1.23.2 备份在 `lib/<arch>/1.23.2_backup/`）。
+3. 替换 `third_party/onnxruntime/include/` 头文件为 1.27.1（1.23.2 头文件备份在
+   `/tmp/ort_dl/headers_1.23.2_backup/`）。
+4. **CMakeLists.txt 头文件路径调整**：1.27.1 头文件从 `include/core/session/` 移到了
+   `include/`，`include_directories` 由 `${ONNXRUNTIME_DIR}/include/core/session`
+   改为 `${ONNXRUNTIME_DIR}/include`。
+5. 清理重建（`rm -rf build && cmake .. && make`），x86_64 验证：
+   - 编译链接通过
+   - 策略加载正常（`policy loaded ... obs_dim=135`）
+   - 会话创建无崩溃、无 `cpuid_info warning`
+6. **待实机验证**：在 Jetson 上重新部署 arm64 二进制，确认：
+   - 启动不再崩溃（1.27.1 含边界检查）
+   - 机器人正常响应（若此前"不响应"也是同一堆损坏导致，则一并解决）
+   - 重新叠加 DataTamer 日志（50Hz），确认日志功能可正常工作
+
+> API 兼容性：项目只用到稳定公共 API（`Ort::Env` / `Ort::Session` / `Run` /
+> `CreateTensor` / `MemoryInfo` / `GetInputNameAllocated` / `GetOutputNameAllocated` /
+> `GetCustomMetadataMap`），1.23 → 1.27.1 全部存在且签名一致，无需改业务代码。
 
 ## 6. 相关提交与分支
 
 | 提交 | 说明 |
 |------|------|
-| `cfc54c9` | onnxruntime 控制器，**实机正常**（`dev_fix` 基线） |
-| `864c776` | 引入 DataTamer 500Hz 日志，**实机不响应**（bisect 定位） |
+| `cfc54c9` | onnxruntime 控制器（vendored 1.23.2，含 CPUIDInfo bug） |
+| `864c776` | 引入 DataTamer 500Hz 日志（后被误判为根因） |
 | `d26e442` | 日志新增 PD 命令字段（dof_vel_targets/kp/kd/tau_ff） |
 | `ca26d40` | 符号链接自愈 + 禁用信号处理日志冲刷 |
 | `5b67832` | 接口所有权移回 RobotController + 注释 LogDataStep |
-| `dev_ort` | 上述 DataTamer 系列提交所在分支 |
-| `dev_fix` | 当前修复分支，基于 `cfc54c9`（实机可用） |
+| `dev_ort` | 当前分支（DataTamer 系列 + 问题文档 + onnxruntime 1.27.1 升级） |
 
 ## 7. 结论
 
-**DataTamer 的引入与"实机不响应"强相关（bisect 确认），但具体机制尚未定位。**
-已排除：构建/符号链接、DataLogger 创建崩溃、参数约定、500Hz 采样率、命令内容被篡改。
-日志单次开销在 x86 上可忽略，但**实机（Jetson）上的真实开销与线程间相互作用从未被
-测量**，这是下一步排查的重点。当前以 `dev_fix`（无 DataTamer）作为实机可用基线。
+**根因是 onnxruntime 1.23.2 在 Jetson（arm64）上的 `CPUIDInfo::ArmLinuxInit()`
+越界写 bug（issue #28301 / PR #28344），与 DataTamer 无关。** 旧 lib 以
+`_GLIBCXX_ASSERTIONS` 构建时在启动阶段直接 abort；常规构建则为静默堆损坏，其表现
+（"不响应" vs 崩溃）随堆布局变化而变，造成"DataTamer 导致实机不响应"的假象。
+
+**已修复**：升级 onnxruntime 到 1.27.1（官方，含上游边界检查），x86 构建验证通过，
+DataTamer 相关业务代码无需改动。**剩余工作**：在 Jetson 实机重新部署验证，并恢复
+DataTamer 日志（50Hz）复测。

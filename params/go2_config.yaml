@@ -7,7 +7,7 @@
 # booster_deploy_cpp).  This yaml only supplies the model file, the control
 # period, the sit pose and the transition PD gains.
 
-policy_name: "go2_policy.onnx"     # relative to ../models or absolute path
+policy_name: "go2_rough.onnx"     # relative to ../models or absolute path
 dt: 0.02                           # policy control period (s), 50Hz
 
 # PD gains for the DAMPING -> STAND transition state

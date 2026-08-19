@@ -35,7 +35,7 @@ endif()
 
 include_directories(
     include
-    ${ONNXRUNTIME_DIR}/include/core/session)
+    ${ONNXRUNTIME_DIR}/include)
 
 add_executable(go2_deploy 
 src/main.cpp)
