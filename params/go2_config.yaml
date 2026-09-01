@@ -1,13 +1,18 @@
 # Unitree Go2 policy deployment config
 #
-# A single controller type (Go2OnnxController) drives every policy.
+# Two controller types, each with its own policy model:
+#   - Go2OnnxController  (blind):  uses policy_name
+#   - Go2ParkourController (depth): uses parkour_policy_name
+# The active controller is selected by the `controller` field below.
 # All policy parameters (joint order, PD gains, default pose, action scale,
 # observation terms/scales/clips/history) are read automatically from the
 # ONNX model's metadata_props (mjlab exporter convention, same as
-# booster_deploy_cpp).  This yaml only supplies the model file, the control
+# booster_deploy_cpp).  This yaml only supplies the model files, the control
 # period, the sit pose and the transition PD gains.
 
-policy_name: "go2_rough.onnx"     # relative to ../models or absolute path
+controller: "parkour"                  # "blind" or "parkour"
+policy_name: "go2_rough.onnx"        # blind policy (relative to ../models or absolute)
+parkour_policy_name: "2026-09-01_11-32-56_parkour_cts_depth_9000.onnx"  # parkour policy
 dt: 0.02                           # policy control period (s), 50Hz
 
 # PD gains for the DAMPING -> STAND transition state
@@ -42,3 +47,4 @@ depth_enabled: true
 depth_domain: 1
 depth_interface: "lo"
 depth_topic: "rt/depthimage"
+depth_visualize: false

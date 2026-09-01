@@ -195,6 +195,36 @@ struct OnnxMetadata
             std::cout << ", clip=(" << cfg->clip_min << ", " << cfg->clip_max
                       << "), history=" << cfg->history_length << std::endl;
         }
+        if (depth_image_height > 0)
+        {
+            std::cout << "  depth camera:" << std::endl;
+            std::cout << "    resolution     : " << depth_image_width << "x" << depth_image_height << std::endl;
+            std::cout << "    fovy          : " << depth_fovy_ << std::endl;
+            std::cout << "    far_plane     : " << depth_far_plane_ << std::endl;
+            std::cout << "    cutoff_distance: " << depth_cutoff_distance_ << std::endl;
+            std::cout << "    min_depth     : " << depth_min_depth_ << std::endl;
+        }
+        for (const auto &[gname, gcfg] : obs_groups)
+        {
+            std::cout << "  obs_group '" << gname << "':"
+                      << " history=" << gcfg.history_length
+                      << ", flatten=" << (gcfg.flatten_history_dim ? "true" : "false")
+                      << std::endl;
+            std::cout << "    terms:";
+            for (const auto &t : gcfg.term_names) std::cout << " " << t;
+            std::cout << std::endl;
+            for (const auto &tname : gcfg.term_names)
+            {
+                auto it = gcfg.terms.find(tname);
+                if (it == gcfg.terms.end()) continue;
+                const auto &t = it->second;
+                std::cout << "    - " << tname << ": scale=";
+                if (t.scale.size() == 1) std::cout << t.scale[0];
+                else { std::cout << "["; for (size_t i = 0; i < t.scale.size(); ++i) std::cout << t.scale[i] << (i+1<t.scale.size()?", ":""); std::cout << "]"; }
+                std::cout << ", clip=(" << t.clip_min << ", " << t.clip_max
+                          << "), history=" << t.history_length << std::endl;
+            }
+        }
     }
 };
 

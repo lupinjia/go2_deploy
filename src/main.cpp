@@ -14,8 +14,6 @@
 #include "robot_interface.hpp"
 #include "parkour_controller.hpp"
 
-#include <onnxruntime_cxx_api.h>
-
 using namespace unitree::common;
 using namespace unitree::robot;
 
@@ -28,27 +26,24 @@ static BasicUserController *create_controller(const std::string &cfg_file,
                                               const std::vector<std::string> &joint_names)
 {
     auto cfg = YAML::LoadFile(cfg_file);
-    std::string policy_name = cfg["policy_name"].as<std::string>();
-    fs::path policy_file = policy_name;
-    if (policy_file.is_relative())
-        policy_file = fs::current_path() / "../models" / policy_name;
-    if (!fs::exists(policy_file))
-    {
-        std::cerr << "policy not found: " << policy_file << std::endl;
-        std::exit(EXIT_FAILURE);
-    }
+    std::string controller = cfg["controller"].as<std::string>("blind");
 
-    Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "go2_deploy_factory");
-    Ort::SessionOptions opts;
-    Ort::Session session(env, policy_file.c_str(), opts);
-    auto md = booster_deploy::load_onnx_metadata(session);
-
-    if (md.has_perception())
+    if (controller == "parkour")
     {
-        std::cout << "[main] perception model -> Go2ParkourController" << std::endl;
+        std::string parkour_policy = cfg["parkour_policy_name"].as<std::string>();
+        fs::path policy_file = parkour_policy;
+        if (policy_file.is_relative())
+            policy_file = fs::current_path() / "../models" / parkour_policy;
+        if (!fs::exists(policy_file))
+        {
+            std::cerr << "parkour policy not found: " << policy_file << std::endl;
+            std::exit(EXIT_FAILURE);
+        }
+        std::cout << "[main] controller: parkour (" << parkour_policy << ")" << std::endl;
         return new Go2ParkourController(cfg_file, joint_names);
     }
-    std::cout << "[main] blind model -> Go2OnnxController" << std::endl;
+
+    std::cout << "[main] controller: blind" << std::endl;
     return new Go2OnnxController(cfg_file, joint_names);
 }
 

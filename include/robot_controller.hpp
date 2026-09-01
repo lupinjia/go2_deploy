@@ -31,6 +31,8 @@
 #include "depth_image_subscriber.hpp"
 #include "parkour_controller.hpp"
 
+#include <opencv2/opencv.hpp>
+
 using namespace unitree::common;
 using namespace unitree::robot;
 using namespace unitree::robot::go2;
@@ -98,6 +100,7 @@ public:
             depth_enabled = cfg["depth_enabled"].as<bool>(depth_enabled);
             depth_domain = cfg["depth_domain"].as<int>(depth_domain);
             depth_interface = cfg["depth_interface"].as<std::string>(depth_interface);
+            depth_visualize_ = cfg["depth_visualize"].as<bool>(false);
         }
         catch (...) {}
         if (depth_enabled)
@@ -170,6 +173,7 @@ protected:
 
     std::string config_path_;
     std::unique_ptr<DepthImageSubscriber> depth_subscriber_;
+    bool depth_visualize_ = false;
 
 private:
         
@@ -325,6 +329,15 @@ private:
             if (depth_subscriber_ && depth_subscriber_->latest_frame(depth, dw, dh))
             {
                 ctrl->set_depth_frame(depth.data(), depth.size());
+                if (depth_visualize_ && dw > 0 && dh > 0)
+                {
+                    cv::Mat depth_raw(dh, dw, CV_32FC1, depth.data());
+                    cv::Mat depth_vis;
+                    depth_raw.convertTo(depth_vis, CV_8UC1, 255.0);
+                    cv::resize(depth_vis, depth_vis, cv::Size(dw * 10, dh * 10), 0, 0, cv::INTER_NEAREST);
+                    cv::imshow("parkour depth", depth_vis);
+                    cv::waitKey(1);
+                }
             }
             UserControlStep(true);
             if (CheckTermination())

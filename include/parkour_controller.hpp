@@ -47,7 +47,7 @@ public:
         auto cfg = YAML::LoadFile(cfg_file_);
         try
         {
-            policy_name_ = cfg["policy_name"].as<std::string>();
+            policy_name_ = cfg["parkour_policy_name"].as<std::string>();
             dt = cfg["dt"].as<float>();
             stand_kp_ = cfg["stand_kp"].as<float>();
             stand_kd_ = cfg["stand_kd"].as<float>();
