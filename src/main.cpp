@@ -12,11 +12,45 @@
 #include "robot_controller.hpp"
 #include "user_controller.hpp"
 #include "robot_interface.hpp"
+#include "parkour_controller.hpp"
+
+#include <onnxruntime_cxx_api.h>
 
 using namespace unitree::common;
 using namespace unitree::robot;
 
 namespace fs = std::filesystem;
+
+// Decide controller type from the ONNX metadata: presence of onnx_input_groups
+// (perception/depth/RNN model) selects Go2ParkourController, else the blind
+// Go2OnnxController.
+static BasicUserController *create_controller(const std::string &cfg_file,
+                                              const std::vector<std::string> &joint_names)
+{
+    auto cfg = YAML::LoadFile(cfg_file);
+    std::string policy_name = cfg["policy_name"].as<std::string>();
+    fs::path policy_file = policy_name;
+    if (policy_file.is_relative())
+        policy_file = fs::current_path() / "../models" / policy_name;
+    if (!fs::exists(policy_file))
+    {
+        std::cerr << "policy not found: " << policy_file << std::endl;
+        std::exit(EXIT_FAILURE);
+    }
+
+    Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "go2_deploy_factory");
+    Ort::SessionOptions opts;
+    Ort::Session session(env, policy_file.c_str(), opts);
+    auto md = booster_deploy::load_onnx_metadata(session);
+
+    if (md.has_perception())
+    {
+        std::cout << "[main] perception model -> Go2ParkourController" << std::endl;
+        return new Go2ParkourController(cfg_file, joint_names);
+    }
+    std::cout << "[main] blind model -> Go2OnnxController" << std::endl;
+    return new Go2OnnxController(cfg_file, joint_names);
+}
 
 int main(int argc, char const *argv[])
 {
@@ -48,7 +82,7 @@ int main(int argc, char const *argv[])
 
     // load config and user_controller
     std::string config_file_dir = (param / "go2_config.yaml").string();
-    BasicUserController* user_ctrl = new Go2OnnxController(config_file_dir, go2_joint_names());
+    BasicUserController* user_ctrl = create_controller(config_file_dir, go2_joint_names());
 
     RobotController* robot_controller = new RobotController(log_file_name, user_ctrl);
     // load neural network model

@@ -10,7 +10,8 @@ namespace unitree::common
         DAMPING = 0,
         SIT = 1,
         STAND = 2,
-        CTRL = 3
+        CTRL = 3,
+        PARKOUR = 4
     };
 
     class SimpleStateMachine
@@ -104,6 +105,19 @@ namespace unitree::common
                 return true;
             }
             else // if state is not SIT
+            {
+                return false;
+            }
+        }
+
+        bool Parkour() // enter parkour from STAND (parallel to Ctrl)
+        {
+            if (state == STATES::STAND)
+            {
+                state = STATES::PARKOUR;
+                return true;
+            }
+            else
             {
                 return false;
             }

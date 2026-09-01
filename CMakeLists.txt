@@ -4,6 +4,7 @@ project(go2_deploy)
 SET(CMAKE_CXX_STANDARD 17)
 list(APPEND CMAKE_PREFIX_PATH "/opt/unitree_robotics/lib/cmake")
 find_package(unitree_sdk2 REQUIRED)
+find_package(OpenCV REQUIRED)
 
 # ---------------------------------------------------------------
 # onnxruntime (vendored C++ SDK in third_party/onnxruntime)
@@ -38,18 +39,47 @@ include_directories(
     ${ONNXRUNTIME_DIR}/include)
 
 add_executable(go2_deploy 
-src/main.cpp)
+src/main.cpp
+include/msg/DepthImage_.cpp)
 
 target_link_libraries(go2_deploy
     unitree_sdk2 
     yaml-cpp
     ${ONNXRUNTIME_LIBRARY}
+    ${OpenCV_LIBS}
     pthread
     ${CMAKE_DL_LIBS}
     )
 
 # make libonnxruntime.so findable at runtime
 set_target_properties(go2_deploy PROPERTIES
+    BUILD_RPATH "${ONNXRUNTIME_DIR}/lib/${ONNXRUNTIME_ARCH}"
+    INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib/${ONNXRUNTIME_ARCH}"
+    INSTALL_RPATH_USE_LINK_PATH TRUE
+    )
+
+add_executable(test_metadata tests/test_metadata.cpp)
+target_link_libraries(test_metadata
+    yaml-cpp
+    ${ONNXRUNTIME_LIBRARY}
+    pthread
+    ${CMAKE_DL_LIBS}
+    )
+set_target_properties(test_metadata PROPERTIES
+    BUILD_RPATH "${ONNXRUNTIME_DIR}/lib/${ONNXRUNTIME_ARCH}"
+    INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib/${ONNXRUNTIME_ARCH}"
+    INSTALL_RPATH_USE_LINK_PATH TRUE
+    )
+
+add_executable(test_obs_builder tests/test_obs_builder.cpp)
+target_link_libraries(test_obs_builder
+    unitree_sdk2
+    yaml-cpp
+    ${ONNXRUNTIME_LIBRARY}
+    pthread
+    ${CMAKE_DL_LIBS}
+    )
+set_target_properties(test_obs_builder PROPERTIES
     BUILD_RPATH "${ONNXRUNTIME_DIR}/lib/${ONNXRUNTIME_ARCH}"
     INSTALL_RPATH "${ONNXRUNTIME_DIR}/lib/${ONNXRUNTIME_ARCH}"
     INSTALL_RPATH_USE_LINK_PATH TRUE

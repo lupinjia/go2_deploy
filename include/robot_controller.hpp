@@ -28,6 +28,8 @@
 #include "gamepad.hpp"
 #include "robot_interface.hpp"
 #include "user_controller.hpp"
+#include "depth_image_subscriber.hpp"
+#include "parkour_controller.hpp"
 
 using namespace unitree::common;
 using namespace unitree::robot;
@@ -56,6 +58,7 @@ public:
 
     void loadParam()
     {
+        config_path_ = (fs::current_path() / "../params/go2_config.yaml").string();
         ctrl->loadParam();
     }
 
@@ -83,6 +86,24 @@ public:
 
         lowcmd_publisher->InitChannel();
         lowstate_subscriber->InitChannel(std::bind(&RobotController::LowStateMessageHandler, this, std::placeholders::_1), 1);
+
+        // depth image subscription (parkour); domain/interface come from config
+        // (defaults: sim2sim domain 1 / "lo"; real robot domain 0 / eth0)
+        int depth_domain = 1;
+        std::string depth_interface = "lo";
+        bool depth_enabled = true;
+        try
+        {
+            auto cfg = YAML::LoadFile(config_path_);
+            depth_enabled = cfg["depth_enabled"].as<bool>(depth_enabled);
+            depth_domain = cfg["depth_domain"].as<int>(depth_domain);
+            depth_interface = cfg["depth_interface"].as<std::string>(depth_interface);
+        }
+        catch (...) {}
+        if (depth_enabled)
+        {
+            depth_subscriber_.reset(new DepthImageSubscriber(depth_domain, depth_interface));
+        }
     }
 
     void StartControl()
@@ -146,6 +167,9 @@ protected:
     std::vector<float> compute_time;
 
     RobotStateClient rsc;
+
+    std::string config_path_;
+    std::unique_ptr<DepthImageSubscriber> depth_subscriber_;
 
 private:
         
@@ -246,6 +270,13 @@ private:
         {
             state_machine.Stop();
         }
+        if (gamepad.X.on_press && gamepad.L1.pressed)
+        {
+            if (state_machine.Parkour())
+            {
+                ParkourCallback();
+            }
+        }
     }
 
     // 50Hz
@@ -280,6 +311,21 @@ private:
         }
         if (state_machine.state == STATES::CTRL)
         {
+            UserControlStep(true);
+            if (CheckTermination())
+            {
+                state_machine.Stop();
+                Damping();
+            }
+        }
+        if (state_machine.state == STATES::PARKOUR)
+        {
+            std::vector<float> depth;
+            uint16_t dw = 0, dh = 0;
+            if (depth_subscriber_ && depth_subscriber_->latest_frame(depth, dw, dh))
+            {
+                ctrl->set_depth_frame(depth.data(), depth.size());
+            }
             UserControlStep(true);
             if (CheckTermination())
             {
@@ -381,6 +427,22 @@ private:
         robot.kd = ctrl->kd();
         std::fill(robot.tau_ff.begin(), robot.tau_ff.end(), 0.f);
         std::cout << "Ctrl enabled." << std::endl;
+    }
+
+    void ParkourCallback()
+    {
+        {
+            std::lock_guard<std::mutex> lock(state_mutex);
+            ctrl->reset(ctrl->robot(), gamepad);
+        }
+
+        auto &robot = ctrl->robot();
+        robot.jpos_des = ctrl->stand_pos_real();
+        std::fill(robot.jvel_des.begin(), robot.jvel_des.end(), 0.f);
+        robot.kp = ctrl->kp();
+        robot.kd = ctrl->kd();
+        std::fill(robot.tau_ff.begin(), robot.tau_ff.end(), 0.f);
+        std::cout << "Parkour enabled." << std::endl;
     }
 
     void Damping(float kd = 3.0)

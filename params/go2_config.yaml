@@ -35,3 +35,10 @@ sit_pos: [
     1.28,
     -2.87
 ]
+
+# --- parkour / depth policy (sim2sim) ---
+# depth DDS subscription; sim2sim uses domain 1 + "lo", real robot domain 0 + NIC
+depth_enabled: true
+depth_domain: 1
+depth_interface: "lo"
+depth_topic: "rt/depthimage"

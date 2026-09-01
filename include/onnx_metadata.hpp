@@ -22,6 +22,7 @@
 #include <cstdlib>
 #include <iostream>
 #include <limits>
+#include <map>
 #include <sstream>
 #include <string>
 #include <unordered_map>
@@ -38,6 +39,28 @@ struct ObservationTermCfg
     float clip_min = -std::numeric_limits<float>::infinity();
     float clip_max = std::numeric_limits<float>::infinity();
     int history_length = 0;
+};
+
+struct ObsGroupCfg
+{
+    int history_length = 0;
+    bool flatten_history_dim = true;
+    std::vector<std::string> term_names;
+    std::unordered_map<std::string, ObservationTermCfg> terms;
+
+    const ObservationTermCfg *term(const std::string &name) const
+    {
+        auto it = terms.find(name);
+        if (it == terms.end())
+        {
+            std::cerr << "[onnx_metadata] obs_group term '" << name
+                      << "' not found; available:";
+            for (const auto &kv : terms) std::cerr << " " << kv.first;
+            std::cerr << std::endl;
+            std::abort();
+        }
+        return &it->second;
+    }
 };
 
 struct OnnxMetadata
@@ -63,6 +86,51 @@ struct OnnxMetadata
 
     std::string anchor_body_name;
     std::vector<std::string> body_names;
+
+    // -- perception (depth / RNN / multi-input) -----------------------------
+    std::vector<std::string> onnx_input_names;
+    std::vector<std::vector<int64_t>> onnx_input_shapes;
+    std::vector<std::string> onnx_input_groups;
+    std::vector<std::string> onnx_output_names;
+    std::vector<std::vector<int64_t>> onnx_output_shapes;
+    std::map<std::string, ObsGroupCfg> obs_groups;
+
+    int depth_image_height = 0;
+    int depth_image_width = 0;
+    float depth_fovy_ = 0.f;
+    float depth_far_plane_ = 0.f;
+    float depth_cutoff_distance_ = 0.f;
+    float depth_min_depth_ = 0.f;
+
+    std::string rnn_type;
+    int rnn_hidden_dim = 0;
+    int rnn_num_layers = 0;
+
+    bool has_perception() const { return !onnx_input_names.empty(); }
+
+    std::vector<int64_t> input_shape(const std::string &name) const
+    {
+        for (size_t i = 0; i < onnx_input_names.size(); ++i)
+            if (onnx_input_names[i] == name) return onnx_input_shapes[i];
+        return {};
+    }
+    int depth_width() const { return depth_image_width; }
+    int depth_height() const { return depth_image_height; }
+    float depth_cutoff_distance() const { return depth_cutoff_distance_; }
+    float depth_min_depth() const { return depth_min_depth_; }
+    const ObsGroupCfg &obs_group(const std::string &name) const
+    {
+        auto it = obs_groups.find(name);
+        if (it == obs_groups.end())
+        {
+            std::cerr << "[onnx_metadata] obs group '" << name
+                      << "' not found; available:";
+            for (const auto &kv : obs_groups) std::cerr << " " << kv.first;
+            std::cerr << std::endl;
+            std::abort();
+        }
+        return it->second;
+    }
 
     // -- term lookups -----------------------------------------------------
 
@@ -356,6 +424,100 @@ inline OnnxMetadata load_onnx_metadata(Ort::Session &session)
         if (hit != history.end()) cfg.history_length = hit->second;
         m.observation_terms[name] = std::move(cfg);
     }
+
+    // ---- perception keys (depth / RNN / multi-input) ----
+    m.onnx_input_names = detail::parse_raw_strings(get("onnx_input_names"));
+    m.onnx_input_groups = detail::parse_raw_strings(get("onnx_input_groups"));
+    m.onnx_output_names = detail::parse_raw_strings(get("onnx_output_names"));
+    auto parse_shapes = [&](const std::string &key) {
+        std::vector<std::vector<int64_t>> out;
+        for (const auto &entry : detail::split(get(key), ','))
+        {
+            std::vector<int64_t> dims;
+            for (const auto &tok : detail::split(entry, ';'))
+                dims.push_back(static_cast<int64_t>(detail::parse_scalar(tok)));
+            out.push_back(dims);
+        }
+        return out;
+    };
+    m.onnx_input_shapes = parse_shapes("onnx_input_shapes");
+    m.onnx_output_shapes = parse_shapes("onnx_output_shapes");
+
+    // obs groups: obs_group.<g>.*  (2 passes: per-term keys need term_names populated first;
+    // props is unordered_map, so key order is not guaranteed)
+    {
+        std::map<std::string, ObsGroupCfg> groups;
+        static const std::string prefix = "obs_group.";
+        auto group_key = [&](const std::string &k, std::string &g, std::string &key) -> bool {
+            if (k.rfind(prefix, 0) != 0) return false;
+            std::string rest = k.substr(prefix.size());
+            auto dot = rest.find('.');
+            if (dot == std::string::npos) return false;
+            g = rest.substr(0, dot);
+            key = rest.substr(dot + 1);
+            return true;
+        };
+        for (const auto &kv : props)
+        {
+            std::string g, key;
+            if (!group_key(kv.first, g, key)) continue;
+            auto &cfg = groups[g];
+            if (key == "history_length")
+                cfg.history_length = static_cast<int>(std::strtol(kv.second.c_str(), nullptr, 10));
+            else if (key == "flatten_history_dim")
+                cfg.flatten_history_dim = detail::parse_bool(kv.second);
+            else if (key == "term_names")
+                cfg.term_names = detail::parse_raw_strings(kv.second);
+        }
+        for (const auto &kv : props)
+        {
+            std::string g, key;
+            if (!group_key(kv.first, g, key)) continue;
+            auto &cfg = groups[g];
+            if (key == "term_history_lengths")
+            {
+                auto raw = detail::parse_raw_numeric(kv.second);
+                for (size_t i = 0; i < raw.size() && i < cfg.term_names.size(); ++i)
+                    if (!raw[i].empty())
+                        cfg.terms[cfg.term_names[i]].history_length = static_cast<int>(raw[i][0]);
+            }
+            else if (key == "term_clips")
+            {
+                auto raw = detail::parse_raw_numeric(kv.second);
+                for (size_t i = 0; i < raw.size() && i < cfg.term_names.size(); ++i)
+                {
+                    auto &t = cfg.terms[cfg.term_names[i]];
+                    if (raw[i].size() >= 2) { t.clip_min = raw[i][0]; t.clip_max = raw[i][1]; }
+                }
+            }
+            else if (key == "term_scales")
+            {
+                auto raw = detail::parse_raw_numeric(kv.second);
+                for (size_t i = 0; i < raw.size() && i < cfg.term_names.size(); ++i)
+                {
+                    auto &t = cfg.terms[cfg.term_names[i]];
+                    t.name = cfg.term_names[i];
+                    if (raw[i].empty()) t.scale = {1.0f};
+                    else if (raw[i].size() == 1) t.scale = {raw[i][0]};
+                    else t.scale = raw[i];
+                }
+            }
+        }
+        m.obs_groups = std::move(groups);
+    }
+
+    // depth camera params
+    m.depth_image_height = static_cast<int>(std::strtol(get("depth_image_height").c_str(), nullptr, 10));
+    m.depth_image_width = static_cast<int>(std::strtol(get("depth_image_width").c_str(), nullptr, 10));
+    m.depth_fovy_ = detail::parse_scalar(get("depth_fovy"));
+    m.depth_far_plane_ = detail::parse_scalar(get("depth_far_plane"));
+    m.depth_cutoff_distance_ = detail::parse_scalar(get("depth_cutoff_distance"));
+    m.depth_min_depth_ = detail::parse_scalar(get("depth_min_depth"));
+
+    // RNN params
+    m.rnn_type = get("rnn_type");
+    m.rnn_hidden_dim = static_cast<int>(std::strtol(get("rnn_hidden_dim").c_str(), nullptr, 10));
+    m.rnn_num_layers = static_cast<int>(std::strtol(get("rnn_num_layers").c_str(), nullptr, 10));
 
     return m;
 }

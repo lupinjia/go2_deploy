@@ -90,6 +90,43 @@ public:
         return compute_raw_dim(name);
     }
 
+    // Current obs (no history): term-major, each term clip+scale.
+    // Uses the "actor" obs group term order/scales.
+    std::vector<float> compute_current()
+    {
+        return compute_group_terms("actor", /*history=*/false);
+    }
+
+    // Full history obs (term-major, per-term history). Uses the "history"
+    // obs group; each term is flattened oldest->newest.
+    std::vector<float> compute_history()
+    {
+        return compute_group_terms("history", /*history=*/true);
+    }
+
+    // Set the latest depth frame (already normalized [0,1] 30x53). Keeps a
+    // 2-frame ring buffer (oldest in channel 0, newest in channel 1).
+    void set_depth_frame(const float *data, size_t n)
+    {
+        const int hw = metadata_.depth_height() * metadata_.depth_width();
+        if (static_cast<int>(n) != hw) return;
+        std::vector<float> frame(data, data + n);
+        depth_frames_.push_back(std::move(frame));
+        while (static_cast<int>(depth_frames_.size()) > depth_history_len_)
+            depth_frames_.pop_front();
+    }
+
+    // Depth input tensor [depth_history, H, W], channel-stacked (old->new).
+    std::vector<float> depth_input()
+    {
+        std::vector<float> out;
+        int hw = metadata_.depth_height() * metadata_.depth_width();
+        out.reserve(depth_frames_.size() * hw);
+        for (const auto &f : depth_frames_)
+            out.insert(out.end(), f.begin(), f.end());
+        return out;
+    }
+
     int num_policy_joints() const { return num_policy_joints_; }
     const std::vector<int> &meta2real() const { return meta2real_; }
 
@@ -102,7 +139,7 @@ private:
 
     std::vector<float> compute_raw(const std::string &name) const
     {
-        if (name == "command")
+        if (name == "command" || name == "vel_command")
         {
             return command_;
         }
@@ -144,7 +181,7 @@ private:
 
     int compute_raw_dim(const std::string &name) const
     {
-        if (name == "command" || name == "base_ang_vel" || name == "projected_gravity")
+        if (name == "command" || name == "vel_command" || name == "base_ang_vel" || name == "projected_gravity")
             return 3;
         if (name == "joint_pos" || name == "joint_vel" || name == "actions")
             return num_policy_joints_;
@@ -152,6 +189,27 @@ private:
     }
 
     // -- pipeline: clip -> scale -> history -------------------------------
+
+    // Compute terms of an obs group; optionally apply per-term history.
+    std::vector<float> compute_group_terms(const std::string &group_name, bool with_history)
+    {
+        const auto &g = metadata_.obs_group(group_name);
+        std::vector<float> out;
+        for (const auto &name : g.term_names)
+        {
+            std::vector<float> term_obs = compute_raw(name);
+            const ObservationTermCfg *cfg = g.term(name);
+            if (!std::isinf(cfg->clip_min) || !std::isinf(cfg->clip_max))
+                for (float &v : term_obs)
+                    v = std::max(cfg->clip_min, std::min(cfg->clip_max, v));
+            for (size_t i = 0; i < term_obs.size(); ++i)
+                term_obs[i] *= cfg->scale[std::min(i, cfg->scale.size() - 1)];
+            if (with_history && cfg->history_length > 0)
+                term_obs = push_history(name, std::move(term_obs), cfg->history_length);
+            out.insert(out.end(), term_obs.begin(), term_obs.end());
+        }
+        return out;
+    }
 
     std::vector<float> compute_term(const std::string &name)
     {
@@ -222,6 +280,8 @@ private:
 
     std::unordered_map<std::string, std::deque<std::vector<float>>> history_;
     std::unordered_map<std::string, bool> history_filled_;
+    std::deque<std::vector<float>> depth_frames_;
+    int depth_history_len_ = 2;
 };
 
 } // namespace booster_deploy
