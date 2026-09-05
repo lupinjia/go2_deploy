@@ -12,7 +12,7 @@
 
 controller: "parkour"                  # "blind" or "parkour"
 policy_name: "go2_rough.onnx"        # blind policy (relative to ../models or absolute)
-parkour_policy_name: "2026-09-01_11-32-56_parkour_cts_depth_9000.onnx"  # parkour policy
+parkour_policy_name: "2026-09-03_23-39-43_parkour_cts_depth.onnx"  # parkour policy
 dt: 0.02                           # policy control period (s), 50Hz
 
 # PD gains for the DAMPING -> STAND transition state
@@ -41,10 +41,16 @@ sit_pos: [
     -2.87
 ]
 
+# --- velocity command mapping (joystick [-1,1] -> [min, max]) ---
+# If min >= 0, joystick is clipped to [0,1] first (no backward motion)
+lin_vel_x: [0.0, 1.0]
+lin_vel_y: [0.0, 0.0]
+ang_vel_yaw: [-1.0, 1.0]
+
 # --- parkour / depth policy (sim2sim) ---
 # depth DDS subscription; sim2sim uses domain 1 + "lo", real robot domain 0 + NIC
 depth_enabled: true
 depth_domain: 1
 depth_interface: "lo"
 depth_topic: "rt/depthimage"
-depth_visualize: false
+depth_visualize: true
