@@ -34,7 +34,23 @@ public:
     virtual void GetInput(Go2RobotInterface &robot_interface, Gamepad &gamepad) = 0;
     virtual void DummyCalculate() = 0;
     virtual void Calculate() = 0;
-    virtual void set_depth_frame(const float *data, size_t n) { (void)data; (void)n; }
+    virtual void set_depth_frame(const float *data, size_t n,
+                                 int source_width, int source_height)
+    {
+        (void)data;
+        (void)n;
+        (void)source_width;
+        (void)source_height;
+    }
+    virtual std::vector<float> depth_frame_for_visualization(
+        const float *data, size_t n, int source_width, int source_height,
+        int &output_width, int &output_height) const
+    {
+        output_width = source_width;
+        output_height = source_height;
+        if (data == nullptr) return {};
+        return std::vector<float>(data, data + n);
+    }
     virtual std::vector<float> GetLog() = 0;
 
     // shared robot interface / deployment params (implemented by the controller)

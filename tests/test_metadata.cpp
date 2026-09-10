@@ -19,13 +19,22 @@ int main(int argc, char** argv)
 {
     if (argc < 2)
     {
-        std::cerr << "usage: test_metadata <model.onnx>\n";
+        std::cerr << "usage: test_metadata <model.onnx> [top bottom left right]\n";
         return 2;
     }
     Ort::Env env(ORT_LOGGING_LEVEL_WARNING, "test");
     Ort::SessionOptions opts;
     Ort::Session session(env, argv[1], opts);
     auto md = booster_deploy::load_onnx_metadata(session);
+
+    if (argc == 6)
+    {
+        for (int i = 0; i < 4; ++i)
+        {
+            CHECK(md.depth_crop_region[i] == std::atoi(argv[i + 2]),
+                  "depth_crop_region value");
+        }
+    }
 
     if (md.has_perception())
     {
@@ -39,9 +48,11 @@ int main(int argc, char** argv)
     CHECK(md.input_shape("obs_history")[1] == 900, "obs_history dim1 == 900");
     auto dshape = md.input_shape("depth_image");
     CHECK(dshape.size() == 4, "depth rank 4");
-    CHECK(dshape[1] == 2 && dshape[2] == 30 && dshape[3] == 53, "depth [1,2,30,53]");
-    CHECK(md.depth_width() == 53, "depth width 53");
-    CHECK(md.depth_height() == 30, "depth height 30");
+    CHECK(dshape[1] == 2 && dshape[2] == md.depth_height() &&
+              dshape[3] == md.depth_width(),
+          "depth graph shape matches metadata");
+    CHECK(md.depth_width() > 0, "depth width is positive");
+    CHECK(md.depth_height() > 0, "depth height is positive");
     CHECK(md.depth_cutoff_distance() == 2.5f, "cutoff 2.5");
     CHECK(md.depth_min_depth() == 0.105f, "min depth 0.105");
     CHECK(md.rnn_type == "gru", "rnn type gru");

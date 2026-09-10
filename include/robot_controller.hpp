@@ -328,15 +328,24 @@ private:
             uint16_t dw = 0, dh = 0;
             if (depth_subscriber_ && depth_subscriber_->latest_frame(depth, dw, dh))
             {
-                ctrl->set_depth_frame(depth.data(), depth.size());
-                if (depth_visualize_ && dw > 0 && dh > 0)
+                ctrl->set_depth_frame(depth.data(), depth.size(), dw, dh);
+                if (depth_visualize_)
                 {
-                    cv::Mat depth_raw(dh, dw, CV_32FC1, depth.data());
-                    cv::Mat depth_vis;
-                    depth_raw.convertTo(depth_vis, CV_8UC1, 255.0);
-                    cv::resize(depth_vis, depth_vis, cv::Size(dw * 10, dh * 10), 0, 0, cv::INTER_NEAREST);
-                    cv::imshow("parkour depth", depth_vis);
-                    cv::waitKey(1);
+                    int visual_width = 0, visual_height = 0;
+                    auto visual_depth = ctrl->depth_frame_for_visualization(
+                        depth.data(), depth.size(), dw, dh, visual_width, visual_height);
+                    if (!visual_depth.empty() && visual_width > 0 && visual_height > 0)
+                    {
+                        cv::Mat depth_raw(visual_height, visual_width, CV_32FC1,
+                                          visual_depth.data());
+                        cv::Mat depth_vis;
+                        depth_raw.convertTo(depth_vis, CV_8UC1, 255.0);
+                        cv::resize(depth_vis, depth_vis,
+                                   cv::Size(visual_width * 10, visual_height * 10),
+                                   0, 0, cv::INTER_NEAREST);
+                        cv::imshow("parkour depth", depth_vis);
+                        cv::waitKey(1);
+                    }
                 }
             }
             UserControlStep(true);

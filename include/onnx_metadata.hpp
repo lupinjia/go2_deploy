@@ -17,6 +17,7 @@
 #include <onnxruntime_cxx_api.h>
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <cstddef>
 #include <cstdlib>
@@ -101,6 +102,7 @@ struct OnnxMetadata
     float depth_far_plane_ = 0.f;
     float depth_cutoff_distance_ = 0.f;
     float depth_min_depth_ = 0.f;
+    std::array<int, 4> depth_crop_region = {0, 0, 0, 0};
 
     std::string rnn_type;
     int rnn_hidden_dim = 0;
@@ -114,8 +116,16 @@ struct OnnxMetadata
             if (onnx_input_names[i] == name) return onnx_input_shapes[i];
         return {};
     }
-    int depth_width() const { return depth_image_width; }
-    int depth_height() const { return depth_image_height; }
+    int depth_width() const
+    {
+        auto shape = input_shape("depth_image");
+        return shape.size() >= 4 ? static_cast<int>(shape[3]) : depth_image_width;
+    }
+    int depth_height() const
+    {
+        auto shape = input_shape("depth_image");
+        return shape.size() >= 4 ? static_cast<int>(shape[2]) : depth_image_height;
+    }
     float depth_cutoff_distance() const { return depth_cutoff_distance_; }
     float depth_min_depth() const { return depth_min_depth_; }
     const ObsGroupCfg &obs_group(const std::string &name) const
@@ -198,11 +208,15 @@ struct OnnxMetadata
         if (depth_image_height > 0)
         {
             std::cout << "  depth camera:" << std::endl;
-            std::cout << "    resolution     : " << depth_image_width << "x" << depth_image_height << std::endl;
+            std::cout << "    source resolution: " << depth_image_width << "x" << depth_image_height << std::endl;
+            std::cout << "    model resolution : " << depth_width() << "x" << depth_height() << std::endl;
             std::cout << "    fovy          : " << depth_fovy_ << std::endl;
             std::cout << "    far_plane     : " << depth_far_plane_ << std::endl;
             std::cout << "    cutoff_distance: " << depth_cutoff_distance_ << std::endl;
             std::cout << "    min_depth     : " << depth_min_depth_ << std::endl;
+            std::cout << "    crop_region   : [" << depth_crop_region[0] << ", "
+                      << depth_crop_region[1] << ", " << depth_crop_region[2] << ", "
+                      << depth_crop_region[3] << "]" << std::endl;
         }
         for (const auto &[gname, gcfg] : obs_groups)
         {
@@ -543,6 +557,12 @@ inline OnnxMetadata load_onnx_metadata(Ort::Session &session)
     m.depth_far_plane_ = detail::parse_scalar(get("depth_far_plane"));
     m.depth_cutoff_distance_ = detail::parse_scalar(get("depth_cutoff_distance"));
     m.depth_min_depth_ = detail::parse_scalar(get("depth_min_depth"));
+    auto crop_region = detail::as_float_list(detail::parse_raw_numeric(get("depth_crop_region")));
+    if (crop_region.size() == m.depth_crop_region.size())
+    {
+        for (size_t i = 0; i < crop_region.size(); ++i)
+            m.depth_crop_region[i] = static_cast<int>(crop_region[i]);
+    }
 
     // RNN params
     m.rnn_type = get("rnn_type");

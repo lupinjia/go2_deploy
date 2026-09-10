@@ -53,21 +53,6 @@ public:
             stand_kd_ = cfg["stand_kd"].as<float>();
             ctrl_kp_fallback_ = cfg["ctrl_kp"].as<float>();
             ctrl_kd_fallback_ = cfg["ctrl_kd"].as<float>();
-            if (cfg["lin_vel_x"])
-            {
-                vel_x_min_ = cfg["lin_vel_x"][0].as<float>();
-                vel_x_max_ = cfg["lin_vel_x"][1].as<float>();
-            }
-            if (cfg["lin_vel_y"])
-            {
-                vel_y_min_ = cfg["lin_vel_y"][0].as<float>();
-                vel_y_max_ = cfg["lin_vel_y"][1].as<float>();
-            }
-            if (cfg["ang_vel_yaw"])
-            {
-                vel_yaw_min_ = cfg["ang_vel_yaw"][0].as<float>();
-                vel_yaw_max_ = cfg["ang_vel_yaw"][1].as<float>();
-            }
             if (cfg["sit_pos"])
             {
                 for (const auto &v : cfg["sit_pos"])
@@ -173,10 +158,10 @@ public:
 
     void GetInput(Go2RobotInterface &robot_interface, Gamepad &gamepad) override
     {
-        (void)robot_interface;
-        obs_builder_->command_[0] = map_joystick(gamepad.ly, vel_x_min_, vel_x_max_);
-        obs_builder_->command_[1] = map_joystick(-gamepad.lx, vel_y_min_, vel_y_max_);
-        obs_builder_->command_[2] = map_joystick(-gamepad.rx, vel_yaw_min_, vel_yaw_max_);
+        (void)robot_interface;  // state read from shared robot interface
+        obs_builder_->command_[0] = gamepad.ly;   // linear_x
+        obs_builder_->command_[1] = -gamepad.lx;  // linear_y
+        obs_builder_->command_[2] = -gamepad.rx;  // angular_z
     }
 
     void Calculate() override
@@ -274,9 +259,21 @@ public:
     const std::vector<float> &last_action() const override { return actions_; }
 
     // parkour-specific: feed the latest depth frame into the obs builder
-    void set_depth_frame(const float *data, size_t n) override
+    void set_depth_frame(const float *data, size_t n,
+                         int source_width, int source_height) override
     {
-        if (obs_builder_) obs_builder_->set_depth_frame(data, n);
+        if (obs_builder_)
+            obs_builder_->set_depth_frame(data, n, source_width, source_height);
+    }
+
+    std::vector<float> depth_frame_for_visualization(
+        const float *data, size_t n, int source_width, int source_height,
+        int &output_width, int &output_height) const override
+    {
+        output_width = metadata_ ? metadata_->depth_width() : source_width;
+        output_height = metadata_ ? metadata_->depth_height() : source_height;
+        if (!obs_builder_) return {};
+        return obs_builder_->crop_depth_frame(data, n, source_width, source_height);
     }
 
     std::vector<float> GetLog() override
@@ -307,21 +304,6 @@ private:
     std::vector<float> actions_;
     std::vector<float> last_obs_;
     std::vector<float> hidden_state_;
-
-    float vel_x_min_ = -1.f, vel_x_max_ = 1.f;
-    float vel_y_min_ = -0.4f, vel_y_max_ = 0.4f;
-    float vel_yaw_min_ = -1.f, vel_yaw_max_ = 1.f;
-
-    static float map_joystick(float val, float out_min, float out_max)
-    {
-        if (out_min >= 0.f)
-            val = std::max(0.f, std::min(1.f, val));
-        else
-            val = std::max(-1.f, std::min(1.f, val));
-        float in_min = out_min >= 0.f ? 0.f : -1.f;
-        float in_max = 1.f;
-        return out_min + (val - in_min) / (in_max - in_min) * (out_max - out_min);
-    }
 };
 
 } // namespace unitree::common

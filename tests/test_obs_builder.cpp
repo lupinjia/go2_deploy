@@ -71,14 +71,41 @@ int main(int argc, char** argv)
     // spans [0,60); its last frame starts at 3*19.
     CHECK(std::abs(hist[3*19] - cur[0]) < 1e-5f, "last frame base_ang_vel[0] backfilled");
 
-    // depth buffer: set two frames, expect [2,30,53]
-    std::vector<float> frame(30 * 53, 0.5f);
-    builder.set_depth_frame(frame.data(), frame.size());
-    builder.set_depth_frame(frame.data(), frame.size());
+    constexpr int source_width = 53;
+    constexpr int source_height = 30;
+    std::vector<float> frame(source_height * source_width);
+    for (int r = 0; r < source_height; ++r)
+    {
+        for (int c = 0; c < source_width; ++c)
+            frame[r * source_width + c] = static_cast<float>(r * 1000 + c);
+    }
+    auto cropped = builder.crop_depth_frame(
+        frame.data(), frame.size(), source_width, source_height);
+    CHECK(static_cast<int>(cropped.size()) == md.depth_height() * md.depth_width(),
+          "visualization crop size matches model shape");
+    builder.set_depth_frame(frame.data(), frame.size(), source_width, source_height);
+    builder.set_depth_frame(frame.data(), frame.size(), source_width, source_height);
     auto depth = builder.depth_input();
-    CHECK(static_cast<int>(depth.size()) == 2 * 30 * 53, "depth_input size == 3180");
-    CHECK(std::abs(depth[0] - 0.5f) < 1e-5f, "depth ch0 == 0.5");
-    CHECK(std::abs(depth[30*53] - 0.5f) < 1e-5f, "depth ch1 == 0.5");
+    const auto crop = md.depth_crop_region;
+    const int expected_width = md.depth_width();
+    const int expected_height = md.depth_height();
+    CHECK(static_cast<int>(depth.size()) == 2 * expected_height * expected_width,
+          "depth_input size matches model shape");
+    const int first_source_index = crop[0] * source_width + crop[2];
+    const int last_source_index =
+        (source_height - crop[1] - 1) * source_width +
+        (source_width - crop[3] - 1);
+    if (depth.size() == static_cast<size_t>(2 * expected_height * expected_width))
+    {
+        CHECK(std::abs(depth[0] - frame[first_source_index]) < 1e-5f,
+              "depth crop top-left pixel");
+        CHECK(std::abs(depth[expected_height * expected_width - 1] -
+                       frame[last_source_index]) < 1e-5f,
+              "depth crop bottom-right pixel");
+        CHECK(std::abs(depth[expected_height * expected_width] -
+                       frame[first_source_index]) < 1e-5f,
+              "depth second history frame");
+    }
 
     if (failures == 0)
         std::cout << "ALL PASS\n";

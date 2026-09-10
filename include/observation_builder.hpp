@@ -104,13 +104,40 @@ public:
         return compute_group_terms("history", /*history=*/true);
     }
 
-    // Set the latest depth frame (already normalized [0,1] 30x53). Keeps a
-    // 2-frame ring buffer (oldest in channel 0, newest in channel 1).
-    void set_depth_frame(const float *data, size_t n)
+    std::vector<float> crop_depth_frame(const float *data, size_t n,
+                                         int source_width, int source_height) const
     {
-        const int hw = metadata_.depth_height() * metadata_.depth_width();
-        if (static_cast<int>(n) != hw) return;
-        std::vector<float> frame(data, data + n);
+        if (data == nullptr || source_width <= 0 || source_height <= 0 ||
+            static_cast<size_t>(source_width) * source_height != n)
+            return {};
+
+        const auto crop = metadata_.depth_crop_region;
+        const int top = crop[0];
+        const int bottom = crop[1];
+        const int left = crop[2];
+        const int right = crop[3];
+        const int cropped_width = source_width - left - right;
+        const int cropped_height = source_height - top - bottom;
+        if (top < 0 || bottom < 0 || left < 0 || right < 0 ||
+            cropped_width != metadata_.depth_width() ||
+            cropped_height != metadata_.depth_height() ||
+            cropped_width <= 0 || cropped_height <= 0)
+            return {};
+
+        std::vector<float> frame(static_cast<size_t>(cropped_width) * cropped_height);
+        for (int row = 0; row < cropped_height; ++row)
+        {
+            const float *source = data + (top + row) * source_width + left;
+            auto destination = frame.begin() + row * cropped_width;
+            std::copy(source, source + cropped_width, destination);
+        }
+        return frame;
+    }
+
+    void set_depth_frame(const float *data, size_t n, int source_width, int source_height)
+    {
+        auto frame = crop_depth_frame(data, n, source_width, source_height);
+        if (frame.empty()) return;
         depth_frames_.push_back(std::move(frame));
         while (static_cast<int>(depth_frames_.size()) > depth_history_len_)
             depth_frames_.pop_front();
