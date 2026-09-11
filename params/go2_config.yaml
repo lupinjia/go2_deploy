@@ -12,7 +12,7 @@
 
 controller: "parkour"                  # "blind" or "parkour"
 policy_name: "go2_rough.onnx"        # blind policy (relative to ../models or absolute)
-parkour_policy_name: "2026-09-09_13-26-25_parkour_cts_depth_crop_stereo_noise_21000.onnx"  # parkour policy
+parkour_policy_name: "20260911_gaussian_noise20500.onnx"  # parkour policy
 dt: 0.02                           # policy control period (s), 50Hz
 
 # PD gains for the DAMPING -> STAND transition state
@@ -45,6 +45,6 @@ sit_pos: [
 # depth DDS subscription; sim2sim uses domain 1 + "lo", real robot domain 0 + NIC
 depth_enabled: true
 depth_domain: 0
-depth_interface: "enp4s0"
+depth_interface: "eth0"
 depth_topic: "rt/depthimage"
 depth_visualize: false
