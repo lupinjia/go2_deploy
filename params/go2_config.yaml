@@ -10,7 +10,7 @@
 # booster_deploy_cpp).  This yaml only supplies the model files, the control
 # period, the sit pose and the transition PD gains.
 
-controller: "parkour"                  # "blind" or "parkour"
+controller: "blind"                  # "blind" or "parkour"
 policy_name: "go2_rough.onnx"        # blind policy (relative to ../models or absolute)
 parkour_policy_name: "20260911_gaussian_noise20500.onnx"  # parkour policy
 dt: 0.02                           # policy control period (s), 50Hz
@@ -44,7 +44,7 @@ sit_pos: [
 # --- parkour / depth policy (sim2sim) ---
 # depth DDS subscription; sim2sim uses domain 1 + "lo", real robot domain 0 + NIC
 depth_enabled: true
-depth_domain: 0
-depth_interface: "eth0"
+depth_domain: 1
+depth_interface: "lo"
 depth_topic: "rt/depthimage"
 depth_visualize: false
